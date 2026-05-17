@@ -68,7 +68,7 @@ docker logs -f zefio-edge-node
 🚀 Starting Zefio (K8s Mode: prd)
 ☕ Detected Java Version: 21.0.2 (JDK 21+)
 📂 Log Directory: /Zefio/logs
-⚙️ K8s Custom OPTS (Memory & EAI): -Xms512m -Xmx512m
+⚙️ K8s Custom OPTS (Memory & ETC): -Xms512m -Xmx512m
 ==================================================
 ```
 
