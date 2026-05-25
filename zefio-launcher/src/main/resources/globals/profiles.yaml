@@ -1,3 +1,7 @@
+# ==============================================================================
+# Filename: globals/profiles.yaml
+# Description: Global connection profiles and integration templates for Zefio
+# ==============================================================================
 profiles:
   # ==========================================
   # [Server/Ingress - Receiver]
@@ -111,11 +115,9 @@ profiles:
       onceTryTimeoutMillis: 2000
       onceBackoffDelayMillis: 500
 
-  # ==============================================================================
-  # Filename: globals/profiles-composite.yaml
-  # Description: Templates (Mixin) settings that repeatedly appear in each step.
-  # ==============================================================================
-
+  # ==========================================
+  # Composite Profiles & Integration Templates
+  # ==========================================
   # 💡 Alternative profile from composite (keepAlive: false)
   ingress-sync-alt:
     config:
@@ -134,7 +136,7 @@ profiles:
     exchangePattern: RequestReply
     retry:
       enabled: true
-      maxRetries: 1      # 💡 [TC-19] First line of defense at micro (leaf) level
+      maxRetries: 1      # 💡 First line of defense at leaf level
       delay: 100
     config:
       readTimeout: 3000
@@ -144,7 +146,7 @@ profiles:
   upstream-local-db:
     exchangePattern: RequestReply
     retry:
-      enabled: false     # DB is mainly PK clash, so fail immediately (FAIL_FAST)
+      enabled: false     # Fail immediately on DB clash
     config:
       queryTimeout: 1000
 

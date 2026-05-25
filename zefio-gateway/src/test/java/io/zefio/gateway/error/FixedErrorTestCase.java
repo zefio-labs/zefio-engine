@@ -22,11 +22,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("FixedError 필터 테스트")
+@DisplayName("FixedError filter test")
 public class FixedErrorTestCase extends AbstractNormalFilterTestCase {
 
     public FixedErrorTestCase() throws Exception {
-        super("fixed-test.yaml", "error1");
+        super("error-test.yaml", "error1");
     }
 
     @Override
@@ -88,10 +88,10 @@ public class FixedErrorTestCase extends AbstractNormalFilterTestCase {
     }
 
     @Test
-    @DisplayName("일반에러, errorCodeRules, valueOverrides, messageRule 테스트 (error1)")
+    @DisplayName("General error, errorCodeRules, valueOverrides, messageRule test (error1)")
     void testProcessSync_withValidErrorValuesAndFlowException() throws Exception {
         Payload requestPayload = createFixedEvent("ORIGINAL_MESSAGE");
-        // FlowException의 메시지는 내부적으로 "[E123] " 형태로 가공됨
+        // The message of FlowException is internally processed into the form "[E123] "
         requestPayload.setThrowable(new FlowException(new IOException(), FlowResultStatus.CUSTOM_FILTER_ERROR, "E123", ""));
 
         Payload responsePayload = executeAssert(requestPayload);
@@ -99,12 +99,12 @@ public class FixedErrorTestCase extends AbstractNormalFilterTestCase {
         String modifiedBodyStr = new String(responsePayload.getBody(), filterEncoding);
         System.out.println("Modified body: " + modifiedBodyStr);
 
-        // 🚀 [수정] 13바이트 Payload + E123 에러코드 병합 결과 확인
+        // 🚀 [Modified] Check the result of merging 13-byte Payload + E123 error code
         assertTrue(modifiedBodyStr.startsWith("0013IABC_M[E123]"));
     }
 
     @Test
-    @DisplayName("NullPointerException 에러, errorCodeRules, valueOverrides, messageRule 테스트 (error2)")
+    @DisplayName("NullPointerException error, errorCodeRules, valueOverrides, messageRule test (error2)")
     void testProcessSync_withNullPointerExceptionCause() throws Exception {
         reInitializeFilter("error2");
 
@@ -116,17 +116,17 @@ public class FixedErrorTestCase extends AbstractNormalFilterTestCase {
         String modifiedBodyStr = new String(responsePayload.getBody(), filterEncoding);
         System.out.println("Modified body: " + modifiedBodyStr);
 
-        // 🚀 정상 통과 (10바이트 Payload + null 병합)
+        // 🚀 Passed successfully (10-byte Payload + null merged)
         assertTrue(modifiedBodyStr.startsWith("0010LESZZZnull"));
     }
 
     @Test
-    @DisplayName("일반에러, errorCodeRules, valueOverrides, messageRule 테스트 (error3)")
+    @DisplayName("General error, errorCodeRules, valueOverrides, messageRule test (error3)")
     void testProcessSync_withNoErrorMessageFormat() throws Exception {
         reInitializeFilter("error3");
 
         Payload requestPayload = createFixedEvent("SIMPLE");
-        // "Error Happened" 문자열 주입 (14바이트)
+        // Inject "Error Happened" string (14 bytes)
         requestPayload.setThrowable(new FlowException(new Exception("Error Happened"), FlowResultStatus.CUSTOM_FILTER_ERROR));
 
         Payload responsePayload = executeAssert(requestPayload);
@@ -134,7 +134,7 @@ public class FixedErrorTestCase extends AbstractNormalFilterTestCase {
         String modifiedBodyStr = new String(responsePayload.getBody(), filterEncoding);
         System.out.println("Modified body: " + modifiedBodyStr);
 
-        // 🚀 [수정] "Error Happened" 병합 결과로 총 Payload 16바이트 보정값 확인
+        // 🚀 [Modified] Check the total Payload 16-byte corrected value as a result of merging "Error Happened"
         assertTrue(modifiedBodyStr.startsWith("0016LEError Happened"));
     }
 }

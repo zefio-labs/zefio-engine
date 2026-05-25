@@ -1,6 +1,6 @@
 # ==============================================================================
-# 파일명: flows/flow-tryscope-retry.yaml
-# 설  명: TRY_SCOPE 중첩 구조를 통한 RETRY -> FALLBACK 연쇄 검증 (v2.6 규격)
+# Filename: flows/flow-tryscope-retry.yaml
+# Description: TRY_SCOPE nested structure for RETRY -> FALLBACK chain verification
 # ==============================================================================
 flows:
   - name: tryscope-retry-flow
@@ -25,15 +25,15 @@ flows:
 
     steps:
       # ========================================================================
-      # 🛡️ 외곽 스코프: 내부의 모든 재시도가 실패하고 올라온 에러를 플랜 B로 방어
+      # 🛡️ Outer Scope: Defends Plan B by catching errors that propagated from retries
       # ========================================================================
       - name: outer-fallback-scope
         type: TRY_SCOPE
-        on-error: FALLBACK  # 🚀 [v2.6 핵심] 에러 발생 시 fallback-steps 실행
+        on-error: FALLBACK  # Execute fallback-steps if an error occurs
 
         steps:
           # ====================================================================
-          # 🔄 내부 스코프: 에러 발생 시 3번 재시도 (각 시도간 500ms 대기)
+          # 🔄 Inner Scope: Retry 3 times upon error (500ms delay between attempts)
           # ====================================================================
           - name: inner-retry-scope
             type: TRY_SCOPE
@@ -41,22 +41,23 @@ flows:
             retry:
               enabled: true
               maxRetries: 3
-              delay: 500 # 3회 재시도 시 약 1.5초 이상의 시간이 소요됨
+              delay: 500 # Requires over 1.5 seconds if 3 retries occur
 
-            # 🚀 [v2.6 핵심] 3회 모두 실패하면 공간의 축(흐름)을 어떻게 할 것인가? -> 상위로 던짐!
+            # 🚀 If all 3 attempts fail, what happens to the flow? -> Throw to parent scope!
             on-error: THROW
 
             steps:
-              - name: force-error-step
+              - name: force-error-retry-step
                 type: SpELValidatorInterceptor
                 config:
                   condition: "#{false}"
                   errorMessage: "Retry Trigger Error"
-                  errorStatus: "TIMEOUT" # 🚀 [해결책] 엔진에게 "이건 타임아웃이니까 재시도해!" 라고 속임
+                  errorStatus: "TIMEOUT" # 🚀 [Solution] Tricking the engine into "This is a timeout, so retry!"
 
         # ========================================================================
-        # 🚀 외곽 스코프의 우회 경로
-        # 내부 스코프가 3번 다 실패하고 THROW 한 에러를 여기서 낚아채어 정상 응답으로 조립!
+        # 🚀 Outer Scope's Bypass Path
+        # Intercepts the error thrown after the inner scope exhausted 3 retries
+        # and assembles a normal response!
         # ========================================================================
         fallback-steps:
           - name: fallback-restore
@@ -64,8 +65,8 @@ flows:
             config:
               assignments:
                 - target: "body['PREFIX']"
-                  expression: "#{'RES'}"       # 💡 안전한 SpEL 리터럴 문자열
+                  expression: "#{'RES'}"       # 💡 Safe SpEL literal string
                 - target: "body['TARGET_VAL']"
-                  expression: "#{'RTY'}"       # Retry를 다 거치고 왔음을 마킹
+                  expression: "#{'RTY'}"       # Mark that it arrived after retries
                 - target: "body['GLOBAL_TRX_ID']"
-                  expression: "#{payload.trxID}" # 원래 트랜잭션 ID 복원
+                  expression: "#{payload.trxID}" # Restore original Transaction ID

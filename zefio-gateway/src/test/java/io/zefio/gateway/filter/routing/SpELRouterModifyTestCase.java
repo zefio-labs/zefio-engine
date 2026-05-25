@@ -42,13 +42,13 @@ public class SpELRouterModifyTestCase {
 
     @BeforeEach
     void setUp() throws Exception {
-        // 🚀 OkHttp 클라이언트 초기화
+        // 🚀 Initialize OkHttp client
         this.okHttpClient = new OkHttpClient.Builder()
                 .connectTimeout(3, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
                 .build();
 
-        // 1. Telegram 레이아웃 세팅
+        // 1. Set up Telegram layout
         FixedValues values = new FixedValues();
         values.setEncodingIgnore(true);
         CorrelationField correlation = new CorrelationField(CorrelationIdType.SpEL);
@@ -69,13 +69,13 @@ public class SpELRouterModifyTestCase {
         TelegramFactory.register("fixed-http-req", Telegram.Type.Fixed, valuesMap);
         fixedPayloadBuilder = (FixedPayloadBuilder) TelegramFactory.getBuilder("fixed-http-req");
 
-        // 2. 가상의 수신 데이터 생성 (자바 8 대응: String.repeat 대체)
+        // 2. Create virtual received data (Java 8 compatible: alternative to String.repeat)
         String payloadStr = "REQ" + "ABC" + fillSpaces(58) + "TRX-9999-8888-7777-6666-5555-444";
         rawPayload = payloadStr.getBytes(StandardCharsets.UTF_8);
     }
 
     @Test
-    @DisplayName("1. [EventBuilder] 바이트 원문을 SpEL 및 레이아웃을 통해 TrxID 추출하는가?")
+    @DisplayName("1. [EventBuilder] Does it extract TrxID from raw bytes using SpEL and layout?")
     void testSpelCorrelationExtraction() throws Exception {
         Payload payload = fixedPayloadBuilder.withBody(rawPayload, StandardCharsets.UTF_8);
         assertNotNull(payload.getTrxID());
@@ -83,7 +83,7 @@ public class SpELRouterModifyTestCase {
     }
 
     @Test
-    @DisplayName("2. [Lazy Parsing] 레이아웃 기반 바이트 분할(Map 투영) 검증")
+    @DisplayName("2. [Lazy Parsing] Verify layout-based byte partitioning (Map projection)")
     void testLayoutLazyParsing() throws Exception {
         Payload payload = fixedPayloadBuilder.withBody(rawPayload, StandardCharsets.UTF_8);
         Map<String, Object> parsedBody = fixedPayloadBuilder.parseToMap(payload.getBody(), payload.getCurrentEncoding());
@@ -96,7 +96,7 @@ public class SpELRouterModifyTestCase {
     }
 
     @Test
-    @DisplayName("3. [Flow Simulation] FIXED_VALUE_MODIFIER 필터 동작 모의 테스트")
+    @DisplayName("3. [Flow Simulation] FIXED_VALUE_MODIFIER filter operation mock test")
     void testFixedValueModifierSimulation() throws Exception {
         Payload payload = fixedPayloadBuilder.withBody(rawPayload, StandardCharsets.UTF_8);
         byte[] currentBody = payload.getBody();
@@ -111,11 +111,11 @@ public class SpELRouterModifyTestCase {
     }
 
     @Test
-    @DisplayName("4. [Real HTTP] ROUTER 필터의 XML 타겟 분기 및 이기종 변환 검증")
+    @DisplayName("4. [Real HTTP] Verify XML target branching and heterogeneous transformation of ROUTER filter")
     void testRealHttpServerModificationXmlRoute() throws Exception {
         com.sun.net.httpserver.HttpServer mockTargetServer = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(51101), 0);
         mockTargetServer.createContext("/", ex -> {
-            // 🚀 JDK 1.8 대응: readAllBytes() 대신 IOUtils 사용
+            // 🚀 Java 8 compatible: Use IOUtils instead of readAllBytes()
             byte[] body = IOUtils.toByteArray(ex.getRequestBody());
             ex.sendResponseHeaders(200, body.length);
             ex.getResponseBody().write(body);
@@ -126,7 +126,7 @@ public class SpELRouterModifyTestCase {
 
         try {
             URI targetUri = URI.create("http://127.0.0.1:51001/");
-            assumeTrue(isServerUp(targetUri), "엔진이 기동되지 않았습니다.");
+            assumeTrue(isServerUp(targetUri), "The engine is not started.");
 
             String inputPayload = new String(rawPayload, StandardCharsets.UTF_8);
             TestResponse response = sendHttpRequest(targetUri, inputPayload);
@@ -144,10 +144,10 @@ public class SpELRouterModifyTestCase {
     }
 
     @Test
-    @DisplayName("5. [Real HTTP] VALIDATOR 가드레일 필터의 Fail-Fast 차단 검증")
+    @DisplayName("5. [Real HTTP] Verify Fail-Fast blocking of VALIDATOR guardrail filter")
     void testValidatorFailFastBlock() throws Exception {
         URI targetUri = URI.create("http://127.0.0.1:51001/");
-        assumeTrue(isServerUp(targetUri), "엔진이 기동되지 않았습니다.");
+        assumeTrue(isServerUp(targetUri), "The engine is not started.");
 
         String badPayload = "REQ" + "BAD" + fillSpaces(58) + "TRX-BLOCK-TEST-7777-6666-5555-444";
 
@@ -156,7 +156,7 @@ public class SpELRouterModifyTestCase {
     }
 
     @Test
-    @DisplayName("6. [Real HTTP] ROUTER 필터의 JSON 타겟 분기 및 이기종 변환 검증")
+    @DisplayName("6. [Real HTTP] Verify JSON target branching and heterogeneous transformation of ROUTER filter")
     void testRealHttpServerModificationJsonRoute() throws Exception {
         com.sun.net.httpserver.HttpServer mockTargetServer = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(51101), 0);
         mockTargetServer.createContext("/", ex -> {
@@ -169,7 +169,7 @@ public class SpELRouterModifyTestCase {
 
         try {
             URI targetUri = URI.create("http://127.0.0.1:51001/");
-            assumeTrue(isServerUp(targetUri), "엔진이 기동되지 않았습니다.");
+            assumeTrue(isServerUp(targetUri), "The engine is not started.");
 
             String jsonPayload = "REQ" + "ABC" + fillSpaces(58) + "TRX-JSON-8888-7777-6666-5555-444";
             TestResponse response = sendHttpRequest(targetUri, jsonPayload);

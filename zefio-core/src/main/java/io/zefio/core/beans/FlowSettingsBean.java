@@ -108,7 +108,7 @@ public class FlowSettingsBean implements InitializingBean, DisposableBean {
     }
 
     /** 💡 Hot-Swap entry point for Redis Command Listener */
-    public synchronized void hotSwap(FlowSettings newSettings) {
+    public synchronized void hotSwap(FlowSettings newSettings) throws Exception {
         log.info("🚀 Initiating Hot-Swap for pipeline...");
         try {
             // 1. Graceful shutdown
@@ -123,23 +123,33 @@ public class FlowSettingsBean implements InitializingBean, DisposableBean {
                 }
             }
 
-            // 3. Re-apply configurations (this calls factory.build() -> initialise())
+            // 3. Re-apply configurations
             this.settings = newSettings;
             applyConfiguration(this.settings);
 
             // 4. Manually start the new pipelines
+            boolean hasError = false;
+            StringBuilder errorDetails = new StringBuilder();
+
             for (PipelineService flowService : this.flowServiceList) {
                 try {
                     flowService.start(); // Open the ingress valve
                     log.info("[Hot-Swap] Flow started: {}", flowService.getName());
                 } catch (Exception e) {
+                    hasError = true;
+                    errorDetails.append(flowService.getName()).append(" (").append(e.getMessage()).append("); ");
                     log.error("[Hot-Swap] Failed to start flow: {}", flowService.getName(), e);
                 }
             }
 
-            log.info("✅ Hot-Swap completed successfully.");
+            if (hasError) {
+                throw new RuntimeException("Flow startup failed: " + errorDetails.toString());
+            }
+            log.info("✅ Hot-Swap completed successfully inside Engine.");
+
         } catch (Exception e) {
             log.error("❌ Critical failure during Hot-Swap", e);
+            throw e;
         }
     }
 

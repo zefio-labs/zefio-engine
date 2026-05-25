@@ -1,23 +1,23 @@
 #!/bin/sh
 # ==============================================================================
-# [Zefio 알람 정책 및 모니터링 가이드]
+# [Zefio Alarm Policy and Monitoring Guide]
 #
-# 1. Critical (치명적 오류 - 알람 발생 대상)
-#    - 시스템의 정상 운영이 불가능하거나 즉각적인 서버 확장이 필요한 상태
-#    - [자원/연결 고갈] SYSTEM_BUSY, QUEUE_CAPACITY_EXCEEDED, CONNECTION_POOL_EXHAUSTED
-#    - [인프라/설정] DATABASE_TIMEOUT, SSL_HANDSHAKE_ERROR
-#    - [JVM/OS 레벨] OutOfMemoryError, StackOverflowError 등 프로세스 생존 위협 오류
-#    ※ 과도한 알람 폭주(Log Spam)를 방지하기 위해 1분(60초)간 동일 오류 알람이 제한됩니다.
+# 1. Critical (Fatal Errors - Alarm Trigger Targets)
+#    - State where normal system operation is impossible or immediate server expansion is required
+#    - [Resource/Connection Exhaustion] SYSTEM_BUSY, QUEUE_CAPACITY_EXCEEDED, CONNECTION_POOL_EXHAUSTED
+#    - [Infrastructure/Configuration] DATABASE_TIMEOUT, SSL_HANDSHAKE_ERROR
+#    - [JVM/OS Level] OutOfMemoryError, StackOverflowError, etc. Process survival threatening errors
+#    ※ To prevent excessive alarm flooding (Log Spam), identical error alarms are restricted for 1 minute (60 seconds).
 #
-# 2. ERROR (비치명적 오류 - 실시간 모니터링 대상)
-#    - 전체 시스템 장애는 아니나, 개별 거래 실패나 일시적 지연을 유발하는 오류
-#    - [네트워크 지연] NETWORK_ERROR, READ_TIMEOUT 등 (자동 재시도 대상)
-#    - [클라이언트 오류] BAD_REQUEST, UNAUTHORIZED 등 (HTTP 4xx 계열)
-#    - [서버/연동 오류] INTERNAL_SERVER_ERROR, REMOTE_SERVER_ERROR 등 (HTTP 5xx 계열)
-#    - [비즈니스/기타] TIMEOUT, DUPLICATE_REQUEST, 개별 필터 오류 등
+# 2. ERROR (Non-fatal Errors - Real-time Monitoring Targets)
+#    - Not a total system failure, but errors causing individual transaction failures or temporary delays
+#    - [Network Delay] NETWORK_ERROR, READ_TIMEOUT, etc. (Targets for auto-retry)
+#    - [Client Error] BAD_REQUEST, UNAUTHORIZED, etc. (HTTP 4xx series)
+#    - [Server/Integration Error] INTERNAL_SERVER_ERROR, REMOTE_SERVER_ERROR, etc. (HTTP 5xx series)
+#    - [Business/Other] TIMEOUT, DUPLICATE_REQUEST, individual filter errors, etc.
 # ==============================================================================
 
-# [대시보드 노출 옵션 설정]
+# [Dashboard Display Options Configuration]
 SHOW_JVM="true"
 SHOW_CONN_POOL="true"
 SHOW_THREAD_POOL="true"
@@ -27,7 +27,7 @@ SHOW_NON_CRITICAL="true"
 SHOW_REALTIME="true"
 SHOW_REALTIME_ERR="true"
 
-# [표시 및 포맷 설정]
+# [Display and Formatting Configuration]
 SHOW_RECENT_ROWS=5
 SHOW_ERROR_ROWS=5
 TIME_UNIT="ms"
@@ -35,7 +35,7 @@ TIME_UNIT="ms"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$BIN_DIR/env.sh" ] && . "$BIN_DIR/env.sh" >/dev/null 2>&1
 
-# 🚀 [수정] sed 제거 -> awk를 이용한 안전한 추출
+# 🚀 [Modification] Removed sed -> Safe extraction using awk
 YAML_FILENAME=$(awk -F'classpath:/' '/spring.config.location=classpath:\// { split($2, a, /[" ]/); print a[1]; exit }' "$BIN_DIR/run.sh" 2>/dev/null)
 YAML_FILE="${BASE_DIR}/resources/${YAML_FILENAME:-application.yaml}"
 
@@ -56,7 +56,7 @@ else
     ENV_LABEL="${OS_TYPE:-Unknown}"; CLEAR_CMD="clear"; export LANG=ko_KR.UTF-8
 fi
 
-trap "printf '\n${YELLOW}모니터링을 종료합니다...${RESET}\n'; exit" EXIT SIGINT SIGTERM
+trap "printf '\n${YELLOW}Monitoring terminated...${RESET}\n'; exit" EXIT SIGINT SIGTERM
 
 SERVER_PORT=$(awk -F':' '/^server:[[:space:]]*$/ { in_server=1; next } /^[^[:space:]#]/ { in_server=0 } in_server && /^[[:space:]]+port:/ { gsub(/[^0-9]/, "", $2); print $2; exit }' "$YAML_FILE" 2>/dev/null)
 SERVER_PORT="${SERVER_PORT:-8080}"
@@ -85,18 +85,18 @@ do
     APP_PID=""
     if [ -n "$APP_NAME" ]; then APP_PID=$(ps -ef | awk -v app="$APP_NAME" '/java/ && $0 ~ app && !/awk/ {print $2; exit}'); fi
 
-    if [ -n "$APP_PID" ] && [ -n "$METRICS_DATA" ]; then STATUS_STR="${GREEN}▶ 정상 가동중${RESET} (PID: $APP_PID)"
-    else STATUS_STR="${RED}■ 중단됨${RESET} (STOPPED)"; fi
+    if [ -n "$APP_PID" ] && [ -n "$METRICS_DATA" ]; then STATUS_STR="${GREEN}▶ Running Normally${RESET} (PID: $APP_PID)"
+    else STATUS_STR="${RED}■ Stopped${RESET} (STOPPED)"; fi
 
     $CLEAR_CMD
     printf "${CYAN}================================================================================================${RESET}\n"
     if [ "$AWK_MULTIBYTE_SUPPORT" = "true" ]; then ENGINE_INFO="Advanced Engine (In-Memory)"; else ENGINE_INFO="Safe Mode Engine (In-Memory)"; fi
-    printf "  ${BOLD}연계 시스템 (Zefio) 통합 대시보드${RESET} (OS: $ENV_LABEL, UI: $ENGINE_INFO)\n"
-    printf "  상태 : ${STATUS_STR} | 포트: $SERVER_PORT | 시간: $(date +'%Y-%m-%d %H:%M:%S')\n"
+    printf "  ${BOLD}Integration System (Zefio) Integrated Dashboard${RESET} (OS: $ENV_LABEL, UI: $ENGINE_INFO)\n"
+    printf "  Status: ${STATUS_STR} | Port: $SERVER_PORT | Time: $(date +'%Y-%m-%d %H:%M:%S')\n"
     printf "${CYAN}================================================================================================${RESET}\n"
 
     if [ -z "$METRICS_DATA" ]; then
-        printf "${RED}  [오류] 메트릭 포트($SERVER_PORT)에 연결할 수 없습니다.${RESET}\n"
+        printf "${RED}  [Error] Cannot connect to metrics port ($SERVER_PORT).${RESET}\n"
         sleep $INTERVAL; continue
     fi
 
@@ -155,19 +155,19 @@ do
         { '"$AWK_PARSE_BLOCK"' }
         END {
             if (show_jvm == "true") {
-                print "\n" c_info "[1] 🖥️ JVM 및 시스템 자원 상태" c_res
+                print "\n" c_info "[1] 🖥️ JVM & System Resource Status" c_res
                 print "  --------------------------------------------------------------------------------"
                 h_per = (jvm_max > 0) ? (jvm_used/jvm_max)*100 : 0;
-                printf "  힙 메모리  : %-8.1f / %-8.1f MB (%.1f%%) | 가동시간: %.1f 분\n", jvm_used/1048576, jvm_max/1048576, h_per, uptime/60;
-                printf "  직접 메모리: %-8.1f MB                | CPU 사용: %.1f%%\n", direct/1048576, cpu*100;
-                printf "  파일 디스크립터: %-8d / %-8d   | 최대 GC : %.3f %s\n", int(f_open), int(f_max), (unit=="sec")?gc_max:gc_max*1000, unit;
+                printf "  Heap Memory    : %-8.1f / %-8.1f MB (%.1f%%) | Uptime: %.1f Min\n", jvm_used/1048576, jvm_max/1048576, h_per, uptime/60;
+                printf "  Direct Memory  : %-8.1f MB                | CPU Usage: %.1f%%\n", direct/1048576, cpu*100;
+                printf "  File Descriptor: %-8d / %-8d   | Max GC: %.3f %s\n", int(f_open), int(f_max), (unit=="sec")?gc_max:gc_max*1000, unit;
             }
             if (show_cp == "true") {
                 has_cp = 0; for(n in cp_max) { has_cp = 1; break; }
                 if (has_cp) {
-                    print "\n" c_info "[2] 🌐 대외 연결 세션 (Connection Pool) 상태" c_res
+                    print "\n" c_info "[2] 🌐 External Connection Session (Connection Pool) Status" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  " rpad("업무(Flow)", 18) " | " rpad("모듈(Filter)", 18) " | " rpad("활성(Act)", 9) " | " rpad("대기(Idl)", 9) " | " rpad("최대(Max)", 9)
+                    print "  " rpad("Flow", 18) " | " rpad("Filter", 18) " | " rpad("Active", 9) " | " rpad("Idle", 9) " | " rpad("Max", 9)
                     print "  -------------------|--------------------|-----------|-----------|-----------"
                     for (n in cp_max) {
                         if (cp_max[n] <= 0) continue;
@@ -181,13 +181,13 @@ do
                 has_tp = 0; for(f in tp_pool) { has_tp = 1; break; }
                 has_netty = 0; for(n in netty_pend) { has_netty = 1; break; }
                 if (has_tp || has_netty) {
-                    print "\n" c_info "[3] ⚙️ 스레드 풀 및 비동기 처리" c_res
+                    print "\n" c_info "[3] ⚙️ Thread Pool & Async Processing" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  " rpad("분류(Flow/Type)", 24) " | " rpad("실행(Act)", 10) " | " rpad("크기(Pool)", 10) " | " rpad("대기(Pending)", 15)
+                    print "  " rpad("Flow/Type", 24) " | " rpad("Active", 10) " | " rpad("Pool Size", 10) " | " rpad("Pending", 15)
                     print "  -------------------------|------------|------------|----------------"
                     for (f in tp_pool) {
                         fL = (f in map_flow) ? map_flow[f] : f;
-                        printf "  %s | %s | %s | %s\n", rpad(trunc(fL" (스레드)",24),24), lpad(int(tp_act[f]),10), lpad(int(tp_pool[f]),10), lpad("-",15);
+                        printf "  %s | %s | %s | %s\n", rpad(trunc(fL" (Thread)",24),24), lpad(int(tp_act[f]),10), lpad(int(tp_pool[f]),10), lpad("-",15);
                     }
                     if (has_tp && has_netty) print "  -------------------------|------------|------------|----------------"
                     for (n in netty_pend) {
@@ -202,9 +202,9 @@ do
             if (show_q == "true") {
                 has_q = 0; for(f in q_cap) { has_q = 1; break; }
                 if (has_q) {
-                    print "\n" c_info "[4] 🗄️ 구간별 내부 대기열 (CPU / IO Queue) 상태" c_res
+                    print "\n" c_info "[4] 🗄️ Internal Waiting Queue (CPU / IO Queue) Status by Section" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  " rpad("업무(Flow)", 18) " | " rpad("큐종류(Type)", 12) " | " rpad("대기건수", 12) " | " rpad("최대수용량(Cap)", 14)
+                    print "  " rpad("Flow", 18) " | " rpad("Queue Type", 12) " | " rpad("Pending Cnt", 12) " | " rpad("Max Capacity", 14)
                     print "  -------------------|--------------|--------------|----------------"
                     for (qk in q_cap) {
                         if (q_cap[qk] <= 0) continue;
@@ -218,7 +218,7 @@ do
             if (show_fm == "true") {
                 has_fm = 0; for(k in fm_acc) { has_fm = 1; break; }
                 if (has_fm) {
-                    print "\n" c_info "[5] 📊 구간별 처리 통계 (Filter Metrics)" c_res
+                    print "\n" c_info "[5] 📊 Processing Statistics by Section (Filter Metrics)" c_res
                     print "  --------------------------------------------------------------------------------"
                     max_flen = 16; max_nlen = 18;
                     for (k in fm_acc) {
@@ -233,7 +233,7 @@ do
                     sep_f = ""; for(i=1;i<=max_flen+1;i++) sep_f=sep_f"-";
                     sep_n = ""; for(i=1;i<=max_nlen+1;i++) sep_n=sep_n"-";
 
-                    print "  " rpad("업무(Flow)", max_flen) " | " rpad("모듈(Filter)", max_nlen) " | " rpad("누적(건)", 8) " | " rpad("초당(TPS)", 9) " | " rpad("평균(" unit ")", 11) " | " rpad("최대(" unit ")", 11)
+                    print "  " rpad("Flow", max_flen) " | " rpad("Filter", max_nlen) " | " rpad("Accum(Cnt)", 8) " | " rpad("TPS", 9) " | " rpad("Avg(" unit ")", 11) " | " rpad("Max(" unit ")", 11)
                     print "  " sep_f "|" sep_n "|----------|-----------|-------------|-------------"
                     for (k in fm_acc) {
                         fL = (fm_f[k] in map_flow) ? map_flow[fm_f[k]] : fm_f[k]; nL = (fm_n[k] in map_node) ? map_node[fm_n[k]] : fm_n[k];
@@ -253,19 +253,19 @@ do
         { '"$AWK_PARSE_BLOCK"' }
         END {
             if (show_jvm == "true") {
-                print "\n" c_info "[1] 🖥️ JVM 및 시스템 자원 상태" c_res
+                print "\n" c_info "[1] 🖥️ JVM & System Resource Status" c_res
                 print "  --------------------------------------------------------------------------------"
                 h_per = (jvm_max > 0) ? (jvm_used/jvm_max)*100 : 0;
-                printf "  힙 메모리  : %-8.1f / %-8.1f MB (%.1f%%) | 가동시간: %.1f 분\n", jvm_used/1048576, jvm_max/1048576, h_per, uptime/60;
-                printf "  직접 메모리: %-8.1f MB                | CPU 사용: %.1f%%\n", direct/1048576, cpu*100;
-                printf "  파일 디스크립터: %-8d / %-8d   | 최대 GC : %.3f %s\n", int(f_open), int(f_max), (unit=="sec")?gc_max:gc_max*1000, unit;
+                printf "  Heap Memory    : %-8.1f / %-8.1f MB (%.1f%%) | Uptime: %.1f Min\n", jvm_used/1048576, jvm_max/1048576, h_per, uptime/60;
+                printf "  Direct Memory  : %-8.1f MB                | CPU Usage: %.1f%%\n", direct/1048576, cpu*100;
+                printf "  File Descriptor: %-8d / %-8d   | Max GC: %.3f %s\n", int(f_open), int(f_max), (unit=="sec")?gc_max:gc_max*1000, unit;
             }
             if (show_cp == "true") {
                 has_cp = 0; for(n in cp_max) { has_cp = 1; break; }
                 if (has_cp) {
-                    print "\n" c_info "[2] 🌐 대외 연결 세션 (Connection Pool) 상태" c_res
+                    print "\n" c_info "[2] 🌐 External Connection Session (Connection Pool) Status" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  업무(Flow)       | 모듈(Filter)       | 활성(Act)| 대기(Idl)| 최대(Max)"
+                    print "  Flow             | Filter               | Active   | Idle     | Max      "
                     print "  -----------------|--------------------|----------|----------|----------"
                     for (n in cp_max) {
                         if (cp_max[n] <= 0) continue;
@@ -279,13 +279,13 @@ do
                 has_tp = 0; for(f in tp_pool) { has_tp = 1; break; }
                 has_netty = 0; for(n in netty_pend) { has_netty = 1; break; }
                 if (has_tp || has_netty) {
-                    print "\n" c_info "[3] ⚙️ 스레드 풀 및 비동기 처리" c_res
+                    print "\n" c_info "[3] ⚙️ Thread Pool & Async Processing" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  분류(Flow/Type)          | 실행(Act)  | 크기(Pool) | 대기(Pending)"
+                    print "  Flow/Type                | Active     | Pool Size  | Pending"
                     print "  -------------------------|------------|------------|----------------"
                     for (f in tp_pool) {
                         fL = (f in map_flow) ? map_flow[f] : f;
-                        printf "  %-24s | %10d | %10d | %15s\n", fL" (스레드)", int(tp_act[f]), int(tp_pool[f]), "-";
+                        printf "  %-24s | %10d | %10d | %15s\n", fL" (Thread)", int(tp_act[f]), int(tp_pool[f]), "-";
                     }
                     if (has_tp && has_netty) print "  -------------------------|------------|------------|----------------"
                     for (n in netty_pend) {
@@ -300,9 +300,9 @@ do
             if (show_q == "true") {
                 has_q = 0; for(f in q_cap) { has_q = 1; break; }
                 if (has_q) {
-                    print "\n" c_info "[4] 🗄️ 구간별 내부 대기열 (CPU / IO Queue) 상태" c_res
+                    print "\n" c_info "[4] 🗄️ Internal Waiting Queue (CPU / IO Queue) Status by Section" c_res
                     print "  --------------------------------------------------------------------------------"
-                    print "  업무(Flow)         | 큐종류(Type) | 대기건수     | 최대수용량(Cap)"
+                    print "  Flow               | Queue Type   | Pending Cnt  | Max Capacity"
                     print "  -------------------|--------------|--------------|----------------"
                     for (qk in q_cap) {
                         if (q_cap[qk] <= 0) continue;
@@ -316,7 +316,7 @@ do
             if (show_fm == "true") {
                 has_fm = 0; for(k in fm_acc) { has_fm = 1; break; }
                 if (has_fm) {
-                    print "\n" c_info "[5] 📊 구간별 처리 통계 (Filter Metrics)" c_res
+                    print "\n" c_info "[5] 📊 Processing Statistics by Section (Filter Metrics)" c_res
                     print "  --------------------------------------------------------------------------------"
                     max_flen = 16; max_nlen = 18;
                     for (k in fm_acc) {
@@ -329,7 +329,7 @@ do
                     if (max_nlen > 30) max_nlen = 30;
 
                     fmt_head = "  %-" max_flen "s | %-" max_nlen "s | %8s | %8s | %8s | %8s\n";
-                    printf fmt_head, "흐름(Flow)", "모듈(Filter)", "누적건수", "TPS", "평균(ms)", "최대(ms)";
+                    printf fmt_head, "Flow", "Filter", "Accum Cnt", "TPS", "Avg(ms)", "Max(ms)";
                     sep_f = ""; for(i=1;i<=max_flen+1;i++) sep_f=sep_f"-";
                     sep_n = ""; for(i=1;i<=max_nlen+1;i++) sep_n=sep_n"-";
                     print "  " sep_f "|" sep_n "|----------|----------|----------|----------"
@@ -347,59 +347,59 @@ do
         }'
     fi
 
-    # 🚀 순수 awk 파이프라인 구동
+    # 🚀 Run pure awk pipeline
     AWK_RESULT=$(printf "%s\n" "$METRICS_DATA" | awk -v unit="$TIME_UNIT" -v show_jvm="$SHOW_JVM" -v show_cp="$SHOW_CONN_POOL" -v show_tp="$SHOW_THREAD_POOL" -v show_q="$SHOW_INTERNAL_QUEUE" -v show_fm="$SHOW_FILTER_METRICS" "$AWK_CORE_SCRIPT")
 
-    # 🚀 화면 출력
+    # 🚀 Display on screen
     printf "%s\n" "$AWK_RESULT" | awk '!/^===MAP===/ && !/^===TOTAL_FAIL===/ {print}'
 
-    # 🚀 메타데이터 추출
+    # 🚀 Extract metadata
     LABEL_MAP_STR=$(printf "%s\n" "$AWK_RESULT" | awk '/^===MAP===/ {print substr($0, 10)}')
     TOTAL_ERR_COUNT=$(printf "%s\n" "$AWK_RESULT" | awk '/^===TOTAL_FAIL===/ {print substr($0, 17)}')
     [ -z "$TOTAL_ERR_COUNT" ] && TOTAL_ERR_COUNT=0
 
-    # 🚀 API 호출: 인메모리 버퍼 조회
+    # 🚀 API call: Query in-memory buffer
     RECENT_ERRORS=$(curl -s --connect-timeout 1 "${API_BASE_URL}/recent-errors?limit=50")
     RECENT_STATS=$(curl -s --connect-timeout 1 "${API_BASE_URL}/recent-stats?limit=50")
     RECENT_ERR_STATS=$(curl -s --connect-timeout 1 "${API_BASE_URL}/recent-err-stats?limit=50")
 
-    # [6] 치명적 오류 (FATAL)
-    printf "\n${CYAN}[6] 🚨 치명적 오류 (Critical Alert Push)${RESET}\n"
+    # [6] Fatal Errors (FATAL)
+    printf "\n${CYAN}[6] 🚨 Fatal Errors (Critical Alert Push)${RESET}\n"
     printf "  --------------------------------------------------------------------------------\n"
     if [ -n "$RECENT_ERRORS" ]; then
         FATAL_ERRS=$(echo "$RECENT_ERRORS" | awk '/\[FATAL\]/')
         if [ -n "$FATAL_ERRS" ]; then
             echo "$FATAL_ERRS" | tail -n "$SHOW_ERROR_ROWS" | awk -v col="${RED}" -v rst="${RESET}" '{ print col "  " $0 rst; }'
         else
-            printf "  ${GREEN}현재까지 감지된 치명적 오류가 없습니다.${RESET}\n"
+            printf "  ${GREEN}No fatal errors detected so far.${RESET}\n"
         fi
     else
-        printf "  ${GREEN}현재까지 감지된 치명적 오류가 없습니다.${RESET}\n"
+        printf "  ${GREEN}No fatal errors detected so far.${RESET}\n"
     fi
 
-    # [7] 일반 오류 (ERROR)
+    # [7] General Errors (ERROR)
     if [ "$SHOW_NON_CRITICAL" = "true" ]; then
-        printf "\n${CYAN}[7] ⚠️ 일반 경고 및 오류 (ERROR)${RESET}\n"
+        printf "\n${CYAN}[7] ⚠️ General Warnings & Errors (ERROR)${RESET}\n"
         printf "  --------------------------------------------------------------------------------\n"
         if [ -n "$RECENT_ERRORS" ]; then
             NORMAL_ERRS=$(echo "$RECENT_ERRORS" | awk '/\[ERROR\]/')
             if [ -n "$NORMAL_ERRS" ]; then
                 echo "$NORMAL_ERRS" | tail -n "$SHOW_ERROR_ROWS" | awk -v col="${YELLOW}" -v rst="${RESET}" '{ print col "  " $0 rst; }'
             else
-                printf "  ${GREEN}최근 발생한 비치명적 시스템 에러 내역이 없습니다.${RESET}\n"
+                printf "  ${GREEN}No recent non-fatal system errors recorded.${RESET}\n"
             fi
         else
-            printf "  ${GREEN}최근 발생한 비치명적 시스템 에러 내역이 없습니다.${RESET}\n"
+            printf "  ${GREEN}No recent non-fatal system errors recorded.${RESET}\n"
         fi
     fi
 
-    # [8] & [9] 실시간 거래 내역 통계 처리용 AWK 스크립트 정의
+    # [8] & [9] Define AWK scripts for real-time transaction history statistics processing
     if [ "$AWK_MULTIBYTE_SUPPORT" = "true" ]; then
         AWK_STAT_SCRIPT='
         BEGIN {
             split(labels, pairs, "|"); for(i in pairs){ split(pairs[i], kv, "="); if(kv[1]!="") map[kv[1]]=kv[2]; }
             c_res="\033[0m"; c_warn="\033[1;93m"; c_crit="\033[1;91m";
-            print "  " rpad("시간",12) " | " rpad("추적ID(TID)",36) " | " rpad("업무(Flow)",16) " | " rpad("결과",4) " | " rpad("총소요(" unit ")",11) " | " rpad("처리(" unit ")",11) " | " rpad("대외(" unit ")",11)
+            print "  " rpad("Time",12) " | " rpad("Trace ID (TID)",36) " | " rpad("Flow",16) " | " rpad("Rslt",4) " | " rpad("Total Elap(" unit ")",11) " | " rpad("Process(" unit ")",11) " | " rpad("External(" unit ")",11)
             print "  -------------|--------------------------------------|------------------|------|-------------|-------------|-------------"
         }
         function disp_len(s,   _c, _ascii) { _c = s; _ascii = gsub(/[\x00-\x7F]/, "", _c); return _ascii + (length(_c) * 2); }
@@ -417,7 +417,7 @@ do
         BEGIN {
             split(labels, pairs, "|"); for(i in pairs){ split(pairs[i], kv, "="); if(kv[1]!="") map[kv[1]]=kv[2]; }
             c_res="\033[0m"; c_crit="\033[1;91m";
-            print "  " rpad("시간",12) " | " rpad("추적ID(TID)",36) " | " rpad("업무(Flow)",16) " | " rpad("결과",4) " | " rpad("총소요(" unit ")",11) " | " rpad("처리(" unit ")",11) " | " rpad("대외(" unit ")",11)
+            print "  " rpad("Time",12) " | " rpad("Trace ID (TID)",36) " | " rpad("Flow",16) " | " rpad("Rslt",4) " | " rpad("Total Elap(" unit ")",11) " | " rpad("Process(" unit ")",11) " | " rpad("External(" unit ")",11)
             print "  -------------|--------------------------------------|------------------|------|-------------|-------------|-------------"
         }
         function disp_len(s,   _c, _ascii) { _c = s; _ascii = gsub(/[\x00-\x7F]/, "", _c); return _ascii + (length(_c) * 2); }
@@ -435,7 +435,7 @@ do
         BEGIN {
             split(labels, pairs, "|"); for(i in pairs){ split(pairs[i], kv, "="); if(kv[1]!="") map[kv[1]]=kv[2]; }
             c_res="\033[0m"; c_warn="\033[1;93m"; c_crit="\033[1;91m";
-            print "  시간         | ID(TID)                              | 흐름(Flow)       | 결과   | 총 소요(ms)| 내부 처리(ms)| 외부 연동(ms)"
+            print "  Time         | Trace ID(TID)                        | Flow             | Rslt   | Tot Elap(ms)| Internal(ms) | External(ms) "
             print "  -------------|--------------------------------------|------------------|--------|----------|-------------|-----------"
         }
         {
@@ -448,7 +448,7 @@ do
         BEGIN {
             split(labels, pairs, "|"); for(i in pairs){ split(pairs[i], kv, "="); if(kv[1]!="") map[kv[1]]=kv[2]; }
             c_res="\033[0m"; c_crit="\033[1;91m";
-            print "  시간         | ID(TID)                              | 흐름(Flow)       | 결과   | 총 소요(ms)| 내부 처리(ms)| 외부 연동(ms)"
+            print "  Time         | Trace ID(TID)                        | Flow             | Rslt   | Tot Elap(ms)| Internal(ms) | External(ms) "
             print "  -------------|--------------------------------------|------------------|--------|----------|-------------|-----------"
         }
         {
@@ -458,40 +458,40 @@ do
         }'
     fi
 
-    # [8] 실시간 거래 내역
+    # [8] Real-time Transaction History
     if [ "$SHOW_REALTIME" = "true" ]; then
-        printf "\n${CYAN}[8] 🟢 실시간 거래 내역 (최근 ${SHOW_RECENT_ROWS}건)${RESET}\n"
+        printf "\n${CYAN}[8] 🟢 Real-time Transaction History (Recent ${SHOW_RECENT_ROWS} cases)${RESET}\n"
         printf "  --------------------------------------------------------------------------------\n"
         if [ -n "$RECENT_STATS" ]; then
-            # 🚀 [보안] API 장애 시 JSON 텍스트 파싱을 막기 위한 안전망 추가
+            # 🚀 [Security] Add a safety net to prevent parsing JSON text during API failures
             VALID_STATS=$(echo "$RECENT_STATS" | awk '/\[STAT\]\|/')
             if [ -n "$VALID_STATS" ]; then
                 echo "$VALID_STATS" | tail -n "$SHOW_RECENT_ROWS" | awk -F'|' -v labels="$LABEL_MAP_STR" -v unit="$TIME_UNIT" "$AWK_STAT_SCRIPT"
             else
-                printf "  ${YELLOW}최근 발생한 거래 내역이 없습니다.${RESET}\n"
+                printf "  ${YELLOW}No recent transaction history available.${RESET}\n"
             fi
         else
-            printf "  ${YELLOW}최근 발생한 거래 내역이 없습니다.${RESET}\n"
+            printf "  ${YELLOW}No recent transaction history available.${RESET}\n"
         fi
     fi
 
-    # [9] 실시간 오류 거래 현황
+    # [9] Real-time Error Transaction Status
     if [ "$SHOW_REALTIME_ERR" = "true" ]; then
-        printf "\n${CYAN}[9] 🔴 실시간 오류 거래 현황 (최근 ${SHOW_ERROR_ROWS}건 / 누적 ${TOTAL_ERR_COUNT}건)${RESET}\n"
+        printf "\n${CYAN}[9] 🔴 Real-time Error Transaction Status (Recent ${SHOW_ERROR_ROWS} / Accum ${TOTAL_ERR_COUNT} cases)${RESET}\n"
         printf "  --------------------------------------------------------------------------------\n"
         if [ -n "$RECENT_ERR_STATS" ]; then
             ERR_STATS=$(echo "$RECENT_ERR_STATS" | awk '/\|ERR\|/')
             if [ -n "$ERR_STATS" ]; then
                 echo "$ERR_STATS" | tail -n "$SHOW_ERROR_ROWS" | awk -F'|' -v labels="$LABEL_MAP_STR" -v unit="$TIME_UNIT" "$AWK_STAT_ERR_SCRIPT"
             else
-                printf "  ${GREEN}최근 발생한 거래 오류 내역이 없습니다.${RESET}\n"
+                printf "  ${GREEN}No recent transaction error history available.${RESET}\n"
             fi
         else
-            printf "  ${GREEN}최근 발생한 거래 오류 내역이 없습니다.${RESET}\n"
+            printf "  ${GREEN}No recent transaction error history available.${RESET}\n"
         fi
     fi
 
     printf "\n${CYAN}================================================================================================${RESET}\n"
-    printf "  (상태 가이드) ${GREEN}OK(정상)${RESET} | ${YELLOW}Warn(지연/병목)${RESET} | ${RED}Critical(에러/마비)${RESET}\n"
+    printf "  (Status Guide) ${GREEN}OK (Normal)${RESET} | ${YELLOW}Warn (Delay/Bottleneck)${RESET} | ${RED}Critical (Error/Paralysis)${RESET}\n"
     sleep $INTERVAL
 done

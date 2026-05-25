@@ -10,7 +10,7 @@ import io.zefio.testsupport.payload.IPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Https 2way 테스트")
+@DisplayName("Https 2-way test")
 public class HttpsKeyStoreTestCase extends UpstreamToIngressIntegrationTestCase {
     public HttpsKeyStoreTestCase() throws Exception {
         super("httpsInbound_keystore", "httpsOutbound_keystore");
@@ -44,11 +44,11 @@ public class HttpsKeyStoreTestCase extends UpstreamToIngressIntegrationTestCase 
     }
 
     @Test
-    @DisplayName("Https 동기 송수신 테스트 (Key Store)")
+    @DisplayName("Https synchronous transmission/reception test (Key Store)")
     void testHttpUpstreamRequestResponse() throws Exception {
         if (System.getProperty("java.version").startsWith("1.8")) {
             System.out.println("Skipping test on JDK 1.8 due to Illegal key size issue");
-            return;  // 테스트 건너뛰기
+            return;  // Skip test
         }
 
         send();

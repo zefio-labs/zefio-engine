@@ -1,3 +1,7 @@
+# ==============================================================================
+# Filename: globals/monitor.yaml
+# Description: Zefio system observability, threshold configuration, and log monitoring
+# ==============================================================================
 monitor:
   metrics-reset:
     cron: "0 0 0 * * *"

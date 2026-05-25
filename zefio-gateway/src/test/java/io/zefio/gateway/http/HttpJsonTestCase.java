@@ -11,7 +11,7 @@ import io.zefio.testsupport.payload.JsonPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Http 2way 테스트")
+@DisplayName("Http 2-way test")
 public class HttpJsonTestCase extends UpstreamToIngressIntegrationTestCase {
     public HttpJsonTestCase() throws Exception {
         super("httpInbound_json", "httpOutbound_json");
@@ -47,7 +47,7 @@ public class HttpJsonTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Http 동기 송수신 테스트 (Json 전문 처리)")
+    @DisplayName("Http synchronous transmission/reception test (Json message processing)")
     void testHttpUpstreamRequestResponse() throws Exception {
         send();
     }

@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("JsonValueModifierDirectional 필터 테스트")
+@DisplayName("JsonValueModifierDirectional filter test")
 public class JsonValueModifierDirectionalTestCase extends AbstractNormalFilterTestCase {
 
     public JsonValueModifierDirectionalTestCase() throws Exception {
@@ -35,18 +35,18 @@ public class JsonValueModifierDirectionalTestCase extends AbstractNormalFilterTe
 
     @Override
     public GatewayInterceptor createFilter(Map<String, Object> context) {
-        // 🚀 전역 팩토리에 JSON 빌더 등록
+        // 🚀 Register JSON builder to global factory
         return buildFilterWithContext(context);
     }
 
     // =========================================================================
-    // 🛠️ [Helper 1] 필터 생성 보일러플레이트 제거
+    // 🛠️ [Helper 1] Remove filter creation boilerplate
     // =========================================================================
     private GatewayInterceptor buildFilterWithContext(Map<String, Object> context) {
         PluginContext ctx = PluginContext.builder()
                 .flowName("default")
                 .pluginName(getClass().getName())
-                .telegramName("json-key-test") // 🚀 생성자 검증용 공통 주입
+                .telegramName("json-key-test") // 🚀 Common injection for constructor validation
                 .sharedScheduledPool(sharedPool.getValue0())
                 .sharedIoPool(sharedPool.getValue1())
                 .context(context)
@@ -55,7 +55,7 @@ public class JsonValueModifierDirectionalTestCase extends AbstractNormalFilterTe
     }
 
     // =========================================================================
-    // 🛠️ [Helper 2] 필터 재기동(Re-initialize) 헬퍼
+    // 🛠️ [Helper 2] Filter re-initialization helper
     // =========================================================================
     private void reInitializeFilter(String yamlKey) throws Exception {
         Map<String, Object> context = getContext(yamlKey);
@@ -66,55 +66,55 @@ public class JsonValueModifierDirectionalTestCase extends AbstractNormalFilterTe
     }
 
     // =========================================================================
-    // 🛠️ [Helper 3] 이벤트 생성 보일러플레이트 제거
+    // 🛠️ [Helper 3] Remove event creation boilerplate
     // =========================================================================
     private Payload createJsonEvent(String jsonBody, String trxId) {
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(filterEncoding) : null;
         Payload payload = new ZefioMessage(bodyBytes, filterEncoding);
-        payload.setTelegramName("json-key-test"); // 🚀 팩토리 조회용 공통 주입
+        payload.setTelegramName("json-key-test"); // 🚀 Common injection for factory lookup
         payload.setTrxID(trxId);
         return payload;
     }
 
 
     // =========================================================================
-    // 🧪 테스트 케이스 시작 (반복 코드 완벽 제거)
+    // 🧪 Start of test cases (perfectly removed repetitive code)
     // =========================================================================
 
     @Test
-    @DisplayName("MODIFY_BODY: 이벤트 body 내부 값 치환 테스트")
+    @DisplayName("MODIFY_BODY: Test replacing internal values of event body")
     public void testModifyBody() throws Exception {
         Payload requestPayload = createJsonEvent("{ \"person\": { \"name\": \"Bob\", \"age\": 20 } }", "abc");
 
         filter.executeAsync(requestPayload, Executors.newSingleThreadExecutor()).join();
         String result = new String(requestPayload.getBody(), filterEncoding);
 
-        // 단순 문자열 비교
+        // Simple string comparison
         assertTrue(result.contains("\"name\":\"Alice\""));
         assertTrue(result.contains("\"age\":\"30\""));
     }
 
     @Test
-    @DisplayName("PROPERTY_TO_BODY: property → body 삽입 테스트")
+    @DisplayName("PROPERTY_TO_BODY: Test inserting property → body")
     public void testPropertyToBody() throws Exception {
         reInitializeFilter("propertyToBody");
 
-        // 기존 JSON에 user 객체가 있고 name, age 모두 존재
+        // user object exists in existing JSON and both name and age exist
         Payload payload = createJsonEvent("{\"user\":{\"name\":\"XXX\",\"age\":30}}", "trx002");
 
-        // 이벤트 property 설정
+        // Set event property
         payload.setHeader("userName", "Alice");
-        payload.setHeader("userAge", 25);  // age 추가
+        payload.setHeader("userAge", 25);  // Add age
 
         filter.executeAsync(payload, Executors.newSingleThreadExecutor()).join();
 
-        // body JSON 비교
+        // Compare body JSON
         ObjectMapper mapper = new ObjectMapper();
         JsonNode expectedJson = mapper.readTree("{\"user\":{\"name\":\"Alice\",\"age\":25}}");
         JsonNode actualJson = mapper.readTree(new String(payload.getBody(), filterEncoding));
         assertEquals(expectedJson, actualJson);
 
-        // property 값 체크
+        // Check property value
         assertEquals("Alice", payload.getHeader("userName"));
         assertEquals(25, payload.getHeader("userAge"));
 
@@ -122,7 +122,7 @@ public class JsonValueModifierDirectionalTestCase extends AbstractNormalFilterTe
     }
 
     @Test
-    @DisplayName("BODY_TO_PROPERTY: body → property 추출 테스트")
+    @DisplayName("BODY_TO_PROPERTY: Test extracting body → property")
     public void testBodyToProperty() throws Exception {
         reInitializeFilter("bodyToProperty");
 

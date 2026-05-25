@@ -82,7 +82,7 @@ public class ScatterGatherBasicIntegrationTest {
             log.info("[Final Response ({}ms)]: \n[{}]", elapsed, res);
 
             assertTrue(res.contains("RES"), "Response PREFIX restoration failed");
-            assertTrue(res.contains("FBK"), "Top-level fallback marking (FBK) restoration failed");
+            assertTrue(res.contains("S_G"), "Top-level fallback marking (S_G) restoration failed");
             assertTrue(res.contains(trxId), "Identifier restoration failed");
         });
     }

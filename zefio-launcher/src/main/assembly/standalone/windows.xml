@@ -7,7 +7,7 @@
     <id>windows</id>
 
     <formats>
-        <format>zip</format>  <!-- Windows용은 zip이 일반적 -->
+        <format>zip</format>
     </formats>
 
     <dependencySets>
@@ -25,7 +25,6 @@
                 <include>*.jar</include>
             </includes>
         </fileSet>
-        <!-- native 라이브러리 포함 (디렉토리가 없어도 실패하지 않음) -->
         <fileSet>
             <directory>${project.build.directory}/lib/native</directory>
             <outputDirectory>lib/native</outputDirectory>

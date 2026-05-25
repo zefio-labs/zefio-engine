@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 
-@DisplayName("Tcp 2way 테스트")
+@DisplayName("Tcp 2-way test")
 public class TcpEncodingTestCase extends UpstreamToIngressIntegrationTestCase {
     public TcpEncodingTestCase() throws Exception {
         super("tcpInbound_encoding", "tcpOutbound_encoding");
@@ -43,14 +43,13 @@ public class TcpEncodingTestCase extends UpstreamToIngressIntegrationTestCase {
     public Payload handleFilter(Payload requestPayload) throws Exception {
         String request = new String(requestPayload.getBody(), StandardCharsets.UTF_8);
         byte[] send = request.replace("req", "res").getBytes(StandardCharsets.UTF_8);
-//        return senderBuilder.withBody(send, StandardCharsets.UTF_8);
         requestPayload.setBody(send);
 
         return requestPayload;
     }
 
     @Test
-    @DisplayName("Tcp 송수신 테스트 (인코딩 전문 처리)")
+    @DisplayName("Tcp transmission/reception test (Encoding message processing)")
     void testTcpSyncRequestResponse() throws Exception {
         send();
     }

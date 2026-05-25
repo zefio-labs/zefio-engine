@@ -11,7 +11,7 @@ import io.zefio.testsupport.payload.XmlPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Http 2way 테스트")
+@DisplayName("Http 2-way test")
 public class HttpXmlTestCase extends UpstreamToIngressIntegrationTestCase {
     public HttpXmlTestCase() throws Exception {
         super("httpInbound_xml", "httpOutbound_xml");
@@ -47,7 +47,7 @@ public class HttpXmlTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Http 동기 송수신 테스트 (Xml 전문 처리)")
+    @DisplayName("Http synchronous transmission/reception test (Xml message processing)")
     void testHttpUpstreamRequestResponse() throws Exception {
         send();
     }

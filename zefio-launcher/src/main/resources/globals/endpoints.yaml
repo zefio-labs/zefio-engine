@@ -1,10 +1,10 @@
 # ==============================================================================
-# 파일명: globals/endpoints.yaml
-# 설  명: 라우터나 다른 플로우에서 공통으로 참조(refModuleName)할 전역 엔드포인트
+# Filename: globals/endpoints.yaml
+# Description: Global endpoints referenced by routers or other flows via refModuleName
 # ==============================================================================
 endpoints:
   - name: to-json
-    label: "타겟 요청(HTTP JSON)"
+    label: "Target Request (HTTP JSON)"
     type: HttpUpstream
     telegram: json-standard
     profile: upstream-sync-transient-alt
@@ -18,7 +18,7 @@ endpoints:
       responseEncoding: utf-8
 
   - name: to-xml
-    label: "타겟 요청(HTTP XML)"
+    label: "Target Request (HTTP XML)"
     type: HttpUpstream
     telegram: xml-tcp-delimiter
     profile: upstream-sync-transient-alt

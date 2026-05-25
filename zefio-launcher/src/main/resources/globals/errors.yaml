@@ -1,7 +1,11 @@
+# ==============================================================================
+# Filename: globals/errors.yaml
+# Description: Global error handler configurations for centralized error processing
+# ==============================================================================
 global-errors:
   fixederror:
     type: FixedFaultHandler
-    label: "공통 에러 처리"
+    label: "Common Error Handling"
     config:
       errorCodeRules: []
       valueOverrides: []
@@ -9,7 +13,7 @@ global-errors:
 
   customerror:
     type: FixedFaultHandler
-    label: "공통 에러 처리"
+    label: "Common Error Handling"
     config:
       messageRule:
         offset: 522

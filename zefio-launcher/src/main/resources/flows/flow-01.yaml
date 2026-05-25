@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "1번_TCP_동기_대량중계"
+    label: "1_TCP_Sync_Bulk_Relay"
     options:
       threadPool:
         corePoolSize: 200
@@ -17,10 +17,10 @@ flows:
       ioQueue:
         capacity: 20000
 
-    # 🎯 구성도 Left: sync plain (TCP + Fixed 전문 + Sync 프로필)
+    # 🎯 Architecture Left: Sync Plain (TCP + Fixed Message + Sync Profile)
     ingress:
       name: from
-      label: "소스 수신(51001)"
+      label: "Source Inbound (51001)"
       type: TcpIngress
       telegram: fixed-standard
       profile: ingress-sync
@@ -30,10 +30,10 @@ flows:
         requestEncoding: utf-8
         responseEncoding: utf-8
 
-    # 🎯 구성도 Right: sync plain (TCP + Fixed 전문 + Sync Massive 프로필)
+    # 🎯 Architecture Right: Sync Plain (TCP + Fixed Message + Sync Massive Profile)
     steps:
       - name: to
-        label: "타겟 요청(TCP)"
+        label: "Target Request (TCP)"
         type: TcpUpstream
         telegram: fixed-standard
         profile: upstream-sync-massive

@@ -1,7 +1,7 @@
 @echo off
 call "%~dp0env.bat"
 
-REM PID 파일 확인
+REM Check for PID file
 set "PID_FILE=%BASE_DIR%\bin\%APP_NAME%.pid"
 
 if exist "%PID_FILE%" (

@@ -21,51 +21,51 @@ import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@DisplayName("HTTP Connection Header (Close) 검증 테스트")
+@DisplayName("HTTP Connection Header (Close) verification test")
 public class ConnectionCloseHeaderTestCase extends UpstreamToIngressIntegrationTestCase {
 
     public ConnectionCloseHeaderTestCase() throws Exception {
-        // YAML 설정의 name과 일치해야 함
+        // Must match the name in YAML configuration
         super("httpInbound_connectionHeader_test", "httpOutbound_connectionCloseHeader_test");
     }
 
     @Override
     public IPayloadBuilderFactory createSenderBuilder() throws Exception {
-        // 🚀 [v2.6 레이아웃 설계] 물리적 필드 정의
+        // 🚀 Physical field definition
         List<FixedValues.FixedField> layout = new ArrayList<>();
 
-        // 0~63: 헤더 더미
+        // 0~63: Header dummy
         layout.add(new FixedValues.FixedField("DUMMY_HEAD", 64, 0,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 64~95: Correlation ID (TID) 영역
+        // 64~95: Correlation ID (TID) area
         layout.add(new FixedValues.FixedField("CORR_ID_AREA", 32, 64,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 96~128: 테일 영역
+        // 96~128: Tail area
         layout.add(new FixedValues.FixedField("DUMMY_TAIL", 32, 96,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 1. Framing 전략 설정 (길이 헤더 4바이트)
+        // 1. Set Framing strategy (length header 4 bytes)
         FramingField framing = new FramingField();
         framing.setType(FramingType.Length);
         framing.setLengthDataSize(4);
         framing.setLengthDataInclude(false);
         framing.setLengthDataUpdate(true);
 
-        // 2. Correlation 설정 (레이아웃 정의와 일치시킴)
+        // 2. Set Correlation (match with layout definition)
         CorrelationField correlation = new CorrelationField(CorrelationIdType.Offset);
         correlation.setStart(64);
         correlation.setLength(32);
 
-        // 3. Telegram 및 빌더 생성
+        // 3. Create Telegram and builder
         PayloadBuilder builder = new Telegram.Builder()
                 .name("fixed-standard-offset")
                 .type(Telegram.Type.Fixed)
                 .values(FixedValues.builder()
                         .framing(framing)
                         .correlation(correlation)
-                        .layout(layout)            // 🚀 레이아웃 주입
+                        .layout(layout)            // 🚀 Inject layout
                         .encodingIgnore(false)
                         .build())
                 .build();
@@ -85,12 +85,12 @@ public class ConnectionCloseHeaderTestCase extends UpstreamToIngressIntegrationT
 
     @Override
     public Payload handleFilter(Payload requestPayload) throws Exception {
-        // 서버 에코 로직
+        // Server echo logic
         return requestPayload;
     }
 
     @Test
-    @DisplayName("Case 1: Connection Close 테스트 - 응답 후 즉시 채널 종료 확인")
+    @DisplayName("Case 1: Connection Close test - Verify channel termination immediately after response")
     void testConnectionClose() throws Exception {
         Payload reqPayload = senderBuilder.withBody(generateMessage("CLOSE_TEST"), senderEncoding);
         reqPayload.setTelegramName("fixed-standard-offset");
@@ -98,7 +98,7 @@ public class ConnectionCloseHeaderTestCase extends UpstreamToIngressIntegrationT
         Payload resPayload = getReceiverCapturedEvent();
 
         assertEquals("close", resPayload.getHeaders().get(PayloadHeaders.HTTP_REQUEST_PREFIX + "connection"));
-        System.out.println("Close 테스트 완료 - CID: " + resPayload.getMdcContext().get(MDCKey.CID.name()));
+        System.out.println("Close test completed - CID: " + resPayload.getMdcContext().get(MDCKey.CID.name()));
     }
 
 

@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "2번_TCP_고부하_중계"
+    label: "2_TCP_High_Load_Relay"
     options:
       threadPool:
         corePoolSize: 300
@@ -19,7 +19,7 @@ flows:
 
     ingress:
       name: from
-      label: "소스 수신(51002)"
+      label: "Source Inbound (51002)"
       type: TcpIngress
       telegram: fixed-standard
       profile: ingress-sync
@@ -30,7 +30,7 @@ flows:
         responseEncoding: utf-8
     steps:
       - name: to
-        label: "타겟 요청(TCP_SmallPool)"
+        label: "Target Request (TCP_SmallPool)"
         type: TcpUpstream
         telegram: fixed-standard
         profile: upstream-async-standard

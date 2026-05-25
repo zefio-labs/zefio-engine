@@ -11,7 +11,7 @@ import io.zefio.testsupport.payload.JsonPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Tcp 2way 테스트")
+@DisplayName("Tcp 2-way test")
 public class TcpJsonTestCase extends UpstreamToIngressIntegrationTestCase {
     public TcpJsonTestCase() throws Exception {
         super("tcpInbound_json", "tcpOutbound_json");
@@ -19,8 +19,8 @@ public class TcpJsonTestCase extends UpstreamToIngressIntegrationTestCase {
 
     private final String DELIMITER = "\n";
 
-    // 🚀 완전히 다이어트 성공!
-    // Telegram 조립, Framing, Correlation 설정, Register가 모두 한 줄에 처리됨.
+    // 🚀 Successfully slimmed down completely!
+    // Telegram assembly, Framing, Correlation configuration, and Register are all processed in a single line.
     @Override
     public IPayloadBuilderFactory createSenderBuilder() throws Exception {
         return JsonPayloadBuilderFactory.createStandardFactory("json-spel-test", senderEncoding, 500, DELIMITER);
@@ -52,7 +52,7 @@ public class TcpJsonTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Tcp 송수신 테스트 (JSON 전문 처리)")
+    @DisplayName("Tcp transmission/reception test (JSON message processing)")
     void testTcpSyncRequestResponse() throws Exception {
         send();
     }

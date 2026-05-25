@@ -58,18 +58,18 @@ class MessageRouterInterceptorTest {
         flowExecutor = Executors.newSingleThreadExecutor();
         TelegramFactory.clear();
 
-        // 포맷별 Mock 빌더 셋업 및 팩토리 등록
+        // Set up Mock builders by format and register to factory
         setupMockBuilder(mockFixedBuilder, "fixed-tg", Telegram.Type.Fixed, new FixedValues());
         setupMockBuilder(mockJsonBuilder, "json-tg", Telegram.Type.JSON, new JsonValues());
         setupMockBuilder(mockXmlBuilder, "xml-tg", Telegram.Type.XML, new XmlValues());
 
-        // 타겟 필터 기본 동작 세팅
+        // Set default behavior for target filters
         when(targetFilter1.getPluginName()).thenReturn("target1");
         when(targetFilter2.getPluginName()).thenReturn("target2");
         when(targetFilter1.executeAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(mockPayload));
         when(targetFilter2.executeAsync(any(), any())).thenReturn(CompletableFuture.completedFuture(mockPayload));
 
-        // 🚀 [삭제] BytesUtils를 모킹하던 거추장스러운 로직 삭제! (실제 유틸리티 메서드를 타도록 내버려 둠)
+        // 🚀 [Deleted] Removed the cumbersome logic mocking BytesUtils! (Leaving it to use the actual utility methods)
     }
 
     @AfterEach
@@ -121,10 +121,10 @@ class MessageRouterInterceptorTest {
     }
 
     // =========================================================================
-    // [1] Fixed 포맷 모든 시나리오
+    // [1] All scenarios for Fixed format
     // =========================================================================
 
-    @Test @DisplayName("Fixed 정상: Offset/Length 기반 추출")
+    @Test @DisplayName("Fixed Success: Extraction based on Offset/Length")
     void testFixed_Success() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setOffset(4); r.setLength(2); r.setMatchValue("OK"); r.setRefModuleName("target1");
@@ -134,7 +134,7 @@ class MessageRouterInterceptorTest {
         verify(targetFilter1).executeAsync(e, flowExecutor);
     }
 
-    @Test @DisplayName("Fixed 방어: 전문 길이 부족 시 BAD_REQUEST")
+    @Test @DisplayName("Fixed Defense: BAD_REQUEST when message length is insufficient")
     void testFixed_ShortBody() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setOffset(10); r.setLength(5); r.setMatchValue("OK"); r.setRefModuleName("target1");
@@ -143,10 +143,10 @@ class MessageRouterInterceptorTest {
     }
 
     // =========================================================================
-    // [2] JSON 포맷 모든 시나리오
+    // [2] All scenarios for JSON format
     // =========================================================================
 
-    @Test @DisplayName("JSON 정상: 1Depth Key 기반")
+    @Test @DisplayName("JSON Success: Based on 1Depth Key")
     void testJson_Key_Success() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setKey("type"); r.setMatchValue("REQ"); r.setRefModuleName("target1");
@@ -154,7 +154,7 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("json-tg", "{\"type\":\"REQ\"}"), flowExecutor).join());
     }
 
-    @Test @DisplayName("JSON 정상: JsonPath 중첩 구조")
+    @Test @DisplayName("JSON Success: JsonPath nested structure")
     void testJson_Path_Success() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setPath("$.header.code"); r.setMatchValue("200"); r.setRefModuleName("target2");
@@ -162,7 +162,7 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("json-tg", "{\"header\":{\"code\":\"200\"}}"), flowExecutor).join());
     }
 
-    @Test @DisplayName("JSON Multi-Depth: Jayway JsonPath 정밀 추출")
+    @Test @DisplayName("JSON Multi-Depth: Precise extraction with Jayway JsonPath")
     void testJson_DeepNested() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setPath("$.header.routing.info.target"); r.setMatchValue("OQ"); r.setRefModuleName("target1");
@@ -170,7 +170,7 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("json-tg", "{\"header\":{\"routing\":{\"info\":{\"target\":\"OQ\"}}}}"), flowExecutor).join());
     }
 
-    @Test @DisplayName("JSON Array Depth: 배열 인덱스 추출")
+    @Test @DisplayName("JSON Array Depth: Array index extraction")
     void testJson_Array() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setPath("$.body.items[1].status"); r.setMatchValue("ACTIVE"); r.setRefModuleName("target2");
@@ -178,17 +178,17 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("json-tg", "{\"body\":{\"items\":[{\"status\":\"IDLE\"},{\"status\":\"ACTIVE\"}]}}"), flowExecutor).join());
     }
 
-    @Test @DisplayName("JSON 방어: 포맷 깨짐 시 BAD_REQUEST")
+    @Test @DisplayName("JSON Defense: BAD_REQUEST on broken format")
     void testJson_InvalidFormat() throws Exception {
         initRouter("json-tg", new MessageRoutingRule());
         assertEquals(FlowResultStatus.BAD_REQUEST, catchEx(routerFilter.executeAsync(createEvent("json-tg", "{ invalid"), flowExecutor)).getStatus());
     }
 
     // =========================================================================
-    // [3] XML 포맷 모든 시나리오
+    // [3] All scenarios for XML format
     // =========================================================================
 
-    @Test @DisplayName("XML 정상: 1Depth 노드")
+    @Test @DisplayName("XML Success: 1Depth node")
     void testXml_Key_Success() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setKey("command"); r.setMatchValue("START"); r.setRefModuleName("target1");
@@ -196,7 +196,7 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("xml-tg", "<root><command>START</command></root>"), flowExecutor).join());
     }
 
-    @Test @DisplayName("XML 정상: XPath 중첩 구조")
+    @Test @DisplayName("XML Success: XPath nested structure")
     void testXml_XPath_Success() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setPath("//body/item/status"); r.setMatchValue("ACTIVE"); r.setRefModuleName("target2");
@@ -204,7 +204,7 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("xml-tg", "<msg><body><item><status>ACTIVE</status></item></body></msg>"), flowExecutor).join());
     }
 
-    @Test @DisplayName("XML Attribute: XPath 속성값 추출")
+    @Test @DisplayName("XML Attribute: XPath attribute value extraction")
     void testXml_Attribute() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule();
         r.setPath("//item[@id='002']/@status"); r.setMatchValue("SUCCESS"); r.setRefModuleName("target2");
@@ -212,17 +212,17 @@ class MessageRouterInterceptorTest {
         assertNotNull(routerFilter.executeAsync(createEvent("xml-tg", "<data><item id='002' status='SUCCESS'/></data>"), flowExecutor).join());
     }
 
-    @Test @DisplayName("XML 방어: 포맷 깨짐 시 BAD_REQUEST")
+    @Test @DisplayName("XML Defense: BAD_REQUEST on broken format")
     void testXml_InvalidFormat() throws Exception {
         initRouter("xml-tg", new MessageRoutingRule());
         assertEquals(FlowResultStatus.BAD_REQUEST, catchEx(routerFilter.executeAsync(createEvent("xml-tg", "<msg><status>ACTIVE</msg>"), flowExecutor)).getStatus());
     }
 
     // =========================================================================
-    // [4] 라우팅 논리 및 예외 전이
+    // [4] Routing logic and exception propagation
     // =========================================================================
 
-    @Test @DisplayName("다중 룰 (Priority): Fallback 성공")
+    @Test @DisplayName("Multiple rules (Priority): Fallback success")
     void testRouting_PriorityFallback() throws Exception {
         MessageRoutingRule r1 = new MessageRoutingRule(); r1.setKey("type"); r1.setMatchValue("A"); r1.setRefModuleName("target1");
         MessageRoutingRule r2 = new MessageRoutingRule(); r2.setKey("type"); r2.setMatchValue("B"); r2.setRefModuleName("target2");
@@ -231,13 +231,13 @@ class MessageRouterInterceptorTest {
         verify(targetFilter2).executeAsync(any(), any());
     }
 
-    @Test @DisplayName("매칭 실패: 어떤 룰과도 일치하지 않을 때")
+    @Test @DisplayName("Match failure: When no rule matches")
     void testRouting_NoMatch() throws Exception {
         initRouter("json-tg", new MessageRoutingRule());
         assertEquals(FlowResultStatus.BAD_REQUEST, catchEx(routerFilter.executeAsync(createEvent("json-tg", "{\"x\":\"y\"}"), flowExecutor)).getStatus());
     }
 
-    @Test @DisplayName("타겟 필터 에러 역류: 하위 에러를 그대로 상위로")
+    @Test @DisplayName("Target filter error upstream: Pass lower errors directly to upper level")
     void testRouting_TargetFilterThrowsException() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule(); r.setKey("type"); r.setMatchValue("A"); r.setRefModuleName("target1");
         initRouter("json-tg", r);
@@ -248,23 +248,23 @@ class MessageRouterInterceptorTest {
     }
 
     // =========================================================================
-    // [5] 극한 방어 및 Edge Cases
+    // [5] Extreme Defense and Edge Cases
     // =========================================================================
 
-    @Test @DisplayName("극한 방어: Telegram Values 자체가 Null")
+    @Test @DisplayName("Extreme Defense: Telegram Values itself is Null")
     void testEdge_NullTelegramValues() throws Exception {
         setupMockBuilder(mockJsonBuilder, "null-values-tg", Telegram.Type.JSON, null);
         initRouter("null-values-tg", new MessageRoutingRule());
         assertEquals(FlowResultStatus.BAD_REQUEST, catchEx(routerFilter.executeAsync(createEvent("null-values-tg", "{}"), flowExecutor)).getStatus());
     }
 
-    @Test @DisplayName("극한 방어: Body가 Null일 때")
+    @Test @DisplayName("Extreme Defense: When Body is Null")
     void testEdge_NullBody() throws Exception {
         initRouter("fixed-tg", new MessageRoutingRule());
         assertEquals(FlowResultStatus.BAD_REQUEST, catchEx(routerFilter.executeAsync(createEvent("fixed-tg", null), flowExecutor)).getStatus());
     }
 
-    @Test @DisplayName("설정 엇갈림 방어: JSON 데이터에 Fixed 룰 적용")
+    @Test @DisplayName("Configuration mismatch defense: Applying Fixed rule to JSON data")
     void testEdge_MismatchedConfig() throws Exception {
         MessageRoutingRule r = new MessageRoutingRule(); r.setOffset(0); r.setLength(2); r.setMatchValue("A"); r.setRefModuleName("target1");
         initRouter("json-tg", r);

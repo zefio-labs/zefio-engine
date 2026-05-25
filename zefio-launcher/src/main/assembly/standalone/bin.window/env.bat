@@ -44,10 +44,10 @@ echo Running in '%ENV_TYPE%' mode
 REM ###########################
 REM JVM Options Building
 REM ###########################
-REM 1. Common Options (G1GC 통일)
+REM 1. Common Options (Unified to G1GC)
 set "COMMON_OPTS=-XX:+UseG1GC -DNAME=%APP_NAME% -Djava.net.preferIPv4Stack=true -Dfile.encoding=utf-8"
 
-REM 2. Memory Options (환경별 분기 - pom.xml이 아닌 여기서 통제)
+REM 2. Memory Options (Branch by environment - controlled here instead of pom.xml)
 if /I "%ENV_TYPE%"=="prd" (
     set "MEM_OPTS=-Xms2048m -Xmx2048m -XX:MaxDirectMemorySize=1024m"
 ) else (
@@ -63,7 +63,7 @@ if "%JVM_VERSION%"=="jdk21" (
     set "NETTY_OPTS="
 )
 
-REM 4. Environment Specific Options (Netty Leak Detection 추가)
+REM 4. Environment Specific Options (Add Netty Leak Detection)
 if /I "%ENV_TYPE%"=="prd" (
     set "ENV_OPTS=-Dspring.profiles.active=%ENV_TYPE% -Dio.netty.leakDetection.level=ADVANCED"
 ) else (
@@ -89,4 +89,3 @@ endlocal & (
     set "APP_NAME=%APP_NAME%"
     set "BASE_JAVA_OPTS=%BASE_JAVA_OPTS%"
 )
-

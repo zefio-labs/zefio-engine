@@ -23,7 +23,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("Http Multipart 업로드 테스트")
+@DisplayName("Http Multipart upload test")
 public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase {
 
     public HttpMultipartTestCase() throws Exception {
@@ -32,22 +32,22 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
 
     @Override
     public IPayloadBuilderFactory createSenderBuilder() throws Exception {
-        // 1. Framing 전략 설정 (v2.4.2 규격: MOM 환경에 맞는 프레이밍)
-        // JMS는 메시지 자체가 하나의 단위이므로 EOF(분할 없음) 타입을 주로 사용합니다.
+        // 1. Set Framing strategy
+        // Since the message itself is a single unit in JMS, the EOF (no splitting) type is mainly used.
         FramingField framing = new FramingField();
         framing.setType(FramingType.EOF);
 
-        // 🚀 [v2.6 은탄환] HTTP Multipart는 바디 파싱이 불가능하므로,
-        // SpEL의 '정적 문자열(Static String)' 기능을 활용하여 고정된 TrxID를 부여합니다.
-        // 💡 표현식 주의: 따옴표 안에 홑따옴표가 들어간 "#{'문자열'}" 형태입니다.
+        // 🚀 Since HTTP Multipart body parsing is impossible,
+        // Utilize SpEL's 'Static String' feature to assign a fixed TrxID.
+        // 💡 Caution on expression: It is in the format of "#{'String'}" with single quotes inside double quotes.
         CorrelationField correlation = new CorrelationField(CorrelationIdType.SpEL);
         correlation.setExpression("#{'MULTIPART-TEST-TRX-ID'}");
 
-        // 3. Telegram 및 빌더 생성 (JsonValues @Builder 활용)
+        // 3. Create Telegram and builder (utilize JsonValues @Builder)
         FixedValues.FixedField rawField = new FixedValues.FixedField();
         rawField.setName("RAW_BODY");
-        rawField.setLength(0); // 0은 가변/나머지 전체를 의미하는 규약
-        rawField.setTrim(false); // Multipart 데이터는 공백 제거(trim)를 하면 안 되므로 명시적 설정 권장
+        rawField.setLength(0); // By convention, 0 means variable/entire remainder
+        rawField.setTrim(false); // It is recommended to explicitly set trim to false as Multipart data should not be trimmed
 
         PayloadBuilder builder = new Telegram.Builder()
                 .name("http-multipart-raw")
@@ -55,7 +55,7 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
                 .values(FixedValues.builder()
                         .framing(framing)
                         .correlation(correlation)
-                        // 🚀 레이아웃을 추가하려면 이렇게 전체를 하나의 필드로 잡으면 됩니다.
+                        // 🚀 To add a layout, you can capture the whole as a single field like this.
                         .layout(Collections.singletonList(rawField))
                         .encodingIgnore(true)
                         .build())
@@ -82,7 +82,7 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
 
     @Override
     public Payload handleFilter(Payload requestPayload) throws Exception {
-        // 서버 측에서 업로드된 파일 이름을 응답으로 돌려주는 형태 시뮬레이션
+        // Simulation of returning the uploaded file name as a response from the server side
         String responseMessage = "{\"result\":\"OK\",\"filename\":\"upload_test.txt\"}";
         requestPayload.setBody(responseMessage.getBytes(requestPayload.getCurrentEncoding()));
 
@@ -90,17 +90,17 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
     }
 
     @Test
-    @DisplayName("Http Multipart 파일 업로드 송수신 테스트")
+    @DisplayName("Http Multipart file upload transmission/reception test")
     void testHttpMultipartUpload() throws Exception {
-        // 업로드할 테스트 파일 생성
+        // Create a test file to upload
 //        Paths.get("src", "test", "resources", dirName).toAbsolutePath()
         File file = new File("src/test/resources/upload/multipart_1byte.log");
-        assertTrue(file.exists(), "테스트 파일이 존재해야 합니다.");
+        assertTrue(file.exists(), "The test file must exist.");
 
-        // 파일을 byte[] 로 읽기
+        // Read file as byte[]
         byte[] fileBytes = readFileToBytes(file);
 
-        // multipart 형식으로 body 구성 (간단히 boundary 포함)
+        // Construct body in multipart format (simply including boundary)
         String boundary = "----BoundaryTest1234";
         String multipartBody =
                 "--" + boundary + "\r\n" +
@@ -111,10 +111,10 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
 
         Payload requestPayload = senderBuilder.withBody(multipartBody.getBytes(senderEncoding), senderEncoding);
 
-        // 실제 송수신 수행
+        // Execute actual transmission/reception
         sender.executeAsync(requestPayload, Executors.newSingleThreadExecutor()).join();
 
-        // Inbound 가 받은 이벤트
+        // Event received by Inbound
         Payload responsePayload = getReceiverCapturedEvent();
 
         assertNotNull(responsePayload);
@@ -130,7 +130,7 @@ public class HttpMultipartTestCase extends UpstreamToIngressIntegrationTestCase 
         try (FileInputStream fis = new FileInputStream(file);
              ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 
-            byte[] buffer = new byte[8192]; // 8KB 버퍼
+            byte[] buffer = new byte[8192]; // 8KB buffer
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
                 baos.write(buffer, 0, bytesRead);

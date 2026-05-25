@@ -11,14 +11,14 @@ import io.zefio.testsupport.payload.IPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Tcp 2way 테스트")
+@DisplayName("Tcp 2-way test")
 public class TcpFixedTestCase extends UpstreamToIngressIntegrationTestCase {
     public TcpFixedTestCase() throws Exception {
         super("tcpInbound_fixed", "tcpOutbound_fixed");
     }
 
-    // 🚀 완전히 다이어트 성공!
-    // Telegram 조립, Framing, Correlation 설정, Register가 모두 한 줄에 처리됨.
+    // 🚀 Successfully slimmed down completely!
+    // Telegram assembly, Framing, Correlation configuration, and Register are all processed in a single line.
     @Override
     public IPayloadBuilderFactory createSenderBuilder() throws Exception {
         return FixedPayloadBuilderFactory.createStandardFactory("fixed-standard-tcp", senderEncoding, 500);
@@ -43,7 +43,7 @@ public class TcpFixedTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Tcp 송수신 테스트 (Fixed 전문 처리)")
+    @DisplayName("Tcp transmission/reception test (Fixed message processing)")
     void testTcpSyncRequestResponse() throws Exception {
         send();
     }

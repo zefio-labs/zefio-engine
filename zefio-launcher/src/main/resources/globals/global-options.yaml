@@ -1,3 +1,7 @@
+# ==============================================================================
+# Filename: globals/global-options.yaml
+# Description: System-wide default settings for flows and error policies
+# ==============================================================================
 global-options:
   default-retry:
     enabled: false

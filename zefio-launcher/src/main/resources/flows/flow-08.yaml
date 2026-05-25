@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "8번_HTTP_TO_TCP_고대기열"
+    label: "8_HTTP_TO_TCP_High_Queue"
     options:
       threadPool:
         corePoolSize: 300
@@ -17,10 +17,10 @@ flows:
       ioQueue:
         capacity: 50000
 
-    # 🎯 수신부: 동기(sync)
+    # 🎯 Ingress: Synchronous (Sync)
     ingress:
       name: from
-      label: "HTTP 수신(51008)"
+      label: "HTTP Inbound (51008)"
       type: HttpIngress
       telegram: fixed-standard
       profile: ingress-sync
@@ -29,13 +29,13 @@ flows:
         port: 51008
         requestEncoding: utf-8
         responseEncoding: utf-8
-        # 🚀 [비즈니스 특화] HTTP 응답 헤더
+        # 🚀 [Business-Specific] HTTP Response Header
         responseContentType: text/plain
 
-    # 🎯 송신부: 비동기(async, telegram matching) 10 Pool
+    # 🎯 Upstream: Asynchronous (Async, Telegram matching) 10 Pool
     steps:
       - name: to
-        label: "타겟 요청(TCP_Small)"
+        label: "Target Request (TCP_Small)"
         type: TcpUpstream
         telegram: fixed-standard
         profile: upstream-async-standard

@@ -20,51 +20,51 @@ import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@DisplayName("HTTP Connection Header (Keep-Alive) 검증 테스트")
+@DisplayName("HTTP Connection Header (Keep-Alive) verification test")
 public class ConnectionKeepAliveHeaderTestCase extends UpstreamToIngressIntegrationTestCase {
 
     public ConnectionKeepAliveHeaderTestCase() throws Exception {
-        // YAML 설정의 name과 일치해야 함
+        // Must match the name in YAML configuration
         super("httpInbound_connectionHeader_test", "httpOutbound_connectionKeepAliveHeader_test");
     }
 
     @Override
     public IPayloadBuilderFactory createSenderBuilder() throws Exception {
-        // 🚀 [v2.6 레이아웃 설계] 물리적 필드 정의
+        // 🚀 Physical field definition
         List<FixedValues.FixedField> layout = new ArrayList<>();
 
-        // 0~63: 데이터 더미 영역
+        // 0~63: Data dummy area
         layout.add(new FixedValues.FixedField("DUMMY_HEAD", 64, 0,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 64~95: Correlation ID (TID) 영역
+        // 64~95: Correlation ID (TID) area
         layout.add(new FixedValues.FixedField("CORR_ID_AREA", 32, 64,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 96~128: 테일 영역
+        // 96~128: Tail area
         layout.add(new FixedValues.FixedField("DUMMY_TAIL", 32, 96,
                 FixedValues.FieldType.STRING, FixedValues.Align.L, ' ', true));
 
-        // 1. Framing 전략 설정 (길이 헤더 4바이트)
+        // 1. Set Framing strategy (length header 4 bytes)
         FramingField framing = new FramingField();
         framing.setType(FramingType.Length);
         framing.setLengthDataSize(4);
         framing.setLengthDataInclude(false);
         framing.setLengthDataUpdate(true);
 
-        // 2. Correlation 설정 (레이아웃 정의와 동기화)
+        // 2. Set Correlation (synchronize with layout definition)
         CorrelationField correlation = new CorrelationField(CorrelationIdType.Offset);
         correlation.setStart(64);
         correlation.setLength(32);
 
-        // 3. Telegram 및 빌더 생성
+        // 3. Create Telegram and builder
         PayloadBuilder builder = new Telegram.Builder()
                 .name("fixed-standard-offset")
                 .type(Telegram.Type.Fixed)
                 .values(FixedValues.builder()
                         .framing(framing)
                         .correlation(correlation)
-                        .layout(layout)            // 🚀 레이아웃 주입
+                        .layout(layout)            // 🚀 Inject layout
                         .encodingIgnore(false)
                         .build())
                 .build();
@@ -84,30 +84,30 @@ public class ConnectionKeepAliveHeaderTestCase extends UpstreamToIngressIntegrat
 
     @Override
     public Payload handleFilter(Payload requestPayload) throws Exception {
-        // 서버 에코 로직
+        // Server echo logic
         return requestPayload;
     }
 
     @Test
-    @DisplayName("Case 1: Connection Keep-Alive 테스트 - 연속 요청 시 CID 동일 여부 확인")
+    @DisplayName("Case 1: Connection Keep-Alive test - Verify if CID is identical on consecutive requests")
     void testConnectionKeepAlive() throws Exception {
-        // 첫 번째 요청
+        // First request
         Payload req1 = senderBuilder.withBody(generateMessage("KEEP_TEST_01"), senderEncoding);
 
         sender.executeAsync(req1, Executors.newSingleThreadExecutor()).join();
         String cid1 = (String) getReceiverCapturedEvent().getMdcContext().get(MDCKey.CID.name());
 
 
-        // 두 번째 요청 (연결이 유지되었다면 같은 CID 사용)
+        // Second request (If connection is maintained, use the same CID)
         Payload req2 = senderBuilder.withBody(generateMessage("KEEP_TEST_02"), senderEncoding);
 
         sender.executeAsync(req2, Executors.newSingleThreadExecutor()).join();
         String cid2 = (String) getReceiverCapturedEvent().getMdcContext().get(MDCKey.CID.name());
 
-        System.out.println("Keep-Alive 테스트 - CID1: " + cid1 + ", CID2: " + cid2);
+        System.out.println("Keep-Alive test - CID1: " + cid1 + ", CID2: " + cid2);
 
-        // 동일한 아웃바운드 인스턴스에서 Keep-alive 시 CID가 같아야 함 (커넥션 풀링 작동 시)
-        assertEquals(cid1, cid2, "Keep-Alive 요청임에도 커넥션이 재사용되지 않았습니다.");
+        // CID should be the same on Keep-alive in the same outbound instance (when connection pooling is operating)
+        assertEquals(cid1, cid2, "Connection was not reused despite Keep-Alive request.");
     }
 
     private byte[] generateMessage(String key) {

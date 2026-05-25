@@ -38,5 +38,35 @@
     valueOverrides:
       - offset: 0
         value: "ZZZ"
-    # messageRule 생략 → default: error 전문을 전문 뒤에 append
+    # messageRule omitted → default: append error message after the original message
+    requestEncoding: "utf-8"
+
+- name: json1
+  type: JsonFaultHandler
+  config:
+    errorCodeRules:
+      - errorCode: "E123"
+        key: "code"
+        newCode: "ABC"
+    valueOverrides:
+      - key: "desc"
+        value: "json override"
+    messageRule:
+      mode: "ERROR"
+      key: "code"
+    requestEncoding: "utf-8"
+
+- name: xml1
+  type: XmlFaultHandler
+  config:
+    errorCodeRules:
+      - errorCode: "E123"
+        key: "code"        # Target key for error code replacement
+        newCode: "ABC"
+    valueOverrides:
+      - key: "desc"
+        value: "xml override"
+    messageRule:
+      mode: "ERROR"
+      key: "errorMessage"  # Separate key for prefix merging
     requestEncoding: "utf-8"

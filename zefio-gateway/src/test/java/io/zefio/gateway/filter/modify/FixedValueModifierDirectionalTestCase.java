@@ -21,7 +21,7 @@ import java.util.concurrent.Executors;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@DisplayName("FixedBinaryModifierDirectional 필터 테스트")
+@DisplayName("FixedBinaryModifierDirectional filter test")
 public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterTestCase {
 
     public FixedValueModifierDirectionalTestCase() throws Exception {
@@ -39,13 +39,13 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     // =========================================================================
-    // 🛠️ [Helper 1] 필터 생성 보일러플레이트 제거
+    // 🛠️ [Helper 1] Remove filter creation boilerplate
     // =========================================================================
     private GatewayInterceptor buildFilterWithContext(Map<String, Object> context) {
         PluginContext ctx = PluginContext.builder()
                 .flowName("default")
                 .pluginName(getClass().getName())
-                .telegramName("fixed") // 🚀 공통 주입
+                .telegramName("fixed") // 🚀 Common injection
                 .sharedScheduledPool(sharedPool.getValue0())
                 .sharedIoPool(sharedPool.getValue1())
                 .context(context)
@@ -54,7 +54,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     // =========================================================================
-    // 🛠️ [Helper 2] 필터 재기동(Re-initialize) 헬퍼
+    // 🛠️ [Helper 2] Filter re-initialization helper
     // =========================================================================
     private void reInitializeFilter(String yamlKey) throws Exception {
         Map<String, Object> context = getContext(yamlKey);
@@ -65,23 +65,23 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     // =========================================================================
-    // 🛠️ [Helper 3] 이벤트 생성 보일러플레이트 제거
+    // 🛠️ [Helper 3] Remove event creation boilerplate
     // =========================================================================
     private Payload createFixedEvent(String bodyStr, String trxId) {
         byte[] bodyBytes = bodyStr != null ? bodyStr.getBytes(filterEncoding) : null;
         Payload payload = new ZefioMessage(bodyBytes, filterEncoding);
-        payload.setTelegramName("fixed"); // 🚀 공통 주입
+        payload.setTelegramName("fixed"); // 🚀 Common injection
         payload.setTrxID(trxId);
         return payload;
     }
 
 
     // =========================================================================
-    // 🧪 테스트 케이스 시작 (놀랍도록 간결해진 코드!)
+    // 🧪 Start of test cases (amazingly concise code!)
     // =========================================================================
 
     @Test
-    @DisplayName("기존 body에서 header key 값을 지정된 위치에 넣기")
+    @DisplayName("Insert header key value into the specified position in the existing body")
     public void testSetKeyIntoBody() throws Exception {
         Payload requestPayload = createFixedEvent("XXXXXX", "trx001");
         requestPayload.setHeader("header", "ABC".getBytes(filterEncoding));
@@ -90,14 +90,14 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("key 데이터가 없는 경우 예외 발생")
+    @DisplayName("Throw exception when key data is missing")
     public void testMissingKeyData() {
         Payload requestPayload = createFixedEvent("123456", "trx003");
         executeAssertThrows(Exception.class, requestPayload);
     }
 
     @Test
-    @DisplayName("누적 덮어쓰기 병합")
+    @DisplayName("Cumulative overwrite merging")
     public void testMultipleChildren() throws Exception {
         reInitializeFilter("fixed-body-insert-2");
 
@@ -109,7 +109,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("body보다 큰 key 데이터를 삽입할 때 body가 확장되는지 확인")
+    @DisplayName("Verify body expands when inserting key data larger than the body")
     public void testBodyExpansion() throws Exception {
         reInitializeFilter("fixed-body-insert-4");
 
@@ -120,7 +120,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("문자열 앞 부분을 key로 저장하고 body에서 제거")
+    @DisplayName("Save the prefix of the string as a key and remove it from the body")
     public void testExtractAndRemoveFromBody() throws Exception {
         reInitializeFilter("fixedkeyExtractor1");
         Payload requestPayload = createFixedEvent("ABCDEF", "trx001");
@@ -128,7 +128,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("데이터가 부족할 경우 예외 발생")
+    @DisplayName("Throw exception when data is insufficient")
     public void testDataTooShort() throws Exception {
         reInitializeFilter("fixedkeyExtractor1");
         Payload requestPayload = createFixedEvent("AB", "trx002");
@@ -136,7 +136,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("key로 추출된 값이 정확히 저장되었는지 확인")
+    @DisplayName("Verify extracted value by key is stored correctly")
     public void testKeyPropertyStored() throws Exception {
         reInitializeFilter("fixedkeyExtractor1");
         Payload requestPayload = createFixedEvent("12345678", "trx003");
@@ -144,7 +144,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("null 바디가 입력되었을 경우 예외 발생")
+    @DisplayName("Throw exception when null body is input")
     public void testNullBodyThrowsException() throws Exception {
         reInitializeFilter("fixedkeyExtractor1");
         Payload requestPayload = createFixedEvent(null, "trx004");
@@ -152,7 +152,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("removeExtracted=true 옵션으로 추출된 부분이 body에서 제거되는지 확인")
+    @DisplayName("Verify extracted part is removed from body with removeExtracted=true option")
     public void testExtractAndRemoveWithOptionTrue() throws Exception {
         reInitializeFilter("fixedkeyExtractor2");
         Payload requestPayload = createFixedEvent("ABCDEF", "trx005");
@@ -160,7 +160,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("removeExtracted=false 옵션일 때 body가 변경되지 않는지 확인")
+    @DisplayName("Verify body is not changed when removeExtracted=false option is used")
     public void testExtractWithoutRemovingBody() throws Exception {
         reInitializeFilter("fixedkeyExtractor3");
         Payload requestPayload = createFixedEvent("ABCDEF", "trx006");
@@ -175,7 +175,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("문자열 중간값을 조건부로 치환")
+    @DisplayName("Conditionally replace intermediate string values")
     public void testOffsetReplace_conditionally() throws Exception {
         reInitializeFilter("offsetModifier1");
         Payload requestPayload = createFixedEvent("000ABC123", "abc");
@@ -183,7 +183,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("find가 일치하지 않아도 replace 적용됨 (else 로직)")
+    @DisplayName("Apply replace even if find does not match (else logic)")
     public void testOffsetReplace_noFind() throws Exception {
         reInitializeFilter("offsetModifier1");
         Payload requestPayload = createFixedEvent("000DEF123", "abc");
@@ -191,7 +191,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("입력이 null 이면 예외 발생")
+    @DisplayName("Throw exception if input is null")
     public void testNullInput_throwsException() throws Exception {
         reInitializeFilter("offsetModifier1");
         Payload requestPayload = createFixedEvent(null, "abc");
@@ -199,7 +199,7 @@ public class FixedValueModifierDirectionalTestCase extends AbstractNormalFilterT
     }
 
     @Test
-    @DisplayName("offset이 문자열 길이를 초과할 경우 예외 발생")
+    @DisplayName("Throw exception if offset exceeds string length")
     public void testOffsetOutOfBounds_throwsException() throws Exception {
         reInitializeFilter("offsetModifier1");
         Payload requestPayload = createFixedEvent("00", "abc");

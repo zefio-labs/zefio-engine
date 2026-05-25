@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "9번_HTTP_TO_HTTP_대규모"
+    label: "9_HTTP_TO_HTTP_Massive"
     options:
       threadPool:
         corePoolSize: 200
@@ -17,10 +17,10 @@ flows:
       ioQueue:
         capacity: 20000
 
-    # 🎯 수신부: 동기(sync)
+    # 🎯 Ingress: Synchronous (Sync)
     ingress:
       name: from
-      label: "HTTP 수신(51009)"
+      label: "HTTP Inbound (51009)"
       type: HttpIngress
       telegram: fixed-standard
       profile: ingress-sync
@@ -29,13 +29,13 @@ flows:
         port: 51009
         requestEncoding: utf-8
         responseEncoding: utf-8
-        # 🚀 [비즈니스 특화] 수신측 응답 Content-Type
+        # 🚀 [Business-Specific] Inbound response Content-Type
         responseContentType: text/plain
 
-    # 🎯 송신부: 동기(sync) HTTP 1,000 Pool
+    # 🎯 Upstream: Synchronous (Sync) HTTP 1,000 Pool
     steps:
       - name: to
-        label: "타겟 요청(HTTP_Massive)"
+        label: "Target Request (HTTP_Massive)"
         type: HttpUpstream
         telegram: fixed-standard
         profile: upstream-sync-massive
@@ -45,7 +45,7 @@ flows:
         config:
           host: 192.168.3.218
           port: 51109
-          # 🚀 [비즈니스 라우팅] HTTP 송신 특화 설정
+          # 🚀 [Business Routing] HTTP outbound specific settings
           requestContentType: text/plain
           requestHttpMethod: POST
           requestPath: service/

@@ -1,3 +1,7 @@
+# ==============================================================================
+# Filename: globals/system.yaml
+# Description: Global system settings for hot-deployment and shared thread pools
+# ==============================================================================
 system:
   hotdeploy: true
   thread-pools:
@@ -10,7 +14,7 @@ system:
     io:
       fixedPoolSize: 300
       queueCapacity: 50000
-      threadNamePrefix: Shared-IO
+      threadNamePrefix: Shared-Failsafe
       autoScaling:
         enabled: true
         maxSize: 500

@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class NoTestCaseMultipartFileUpload {
 
     public static void main(String[] args) throws IOException {
-        // 업로드할 파일들
+        // Files to upload
         Map<String, Path> files = new HashMap<>();
         Path basePath = Paths.get(System.getProperty("user.dir"), "link-http", "src", "test", "resources", "upload");
 
@@ -30,18 +30,18 @@ public class NoTestCaseMultipartFileUpload {
         files.put("file2", basePath.resolve("multipart_2mb.log"));
         files.put("file3", basePath.resolve("sscard-20250919.zip"));
 
-        // 파일 존재 여부 확인
+        // Check file existence
         for (Path p : files.values()) {
             assertTrue(p.toFile().exists(), "File not found: " + p);
         }
 
         RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(10000)              // 연결 시도 제한 (10초)
-                .setConnectionRequestTimeout(5000)     // 커넥션 풀에서 대기 제한
-                .setSocketTimeout(300000)               // 데이터 응답 대기 제한 5분
+                .setConnectTimeout(10000)              // Connection attempt limit (10 seconds)
+                .setConnectionRequestTimeout(5000)     // Wait limit in connection pool
+                .setSocketTimeout(300000)               // Data response wait limit 5 minutes
                 .build();
 
-        // HttpClient 생성
+        // Create HttpClient
         try (CloseableHttpClient httpClient = HttpClients.custom()
                 .setDefaultRequestConfig(requestConfig)
                 .build()) {
@@ -52,7 +52,7 @@ public class NoTestCaseMultipartFileUpload {
             MultipartEntityBuilder builder = MultipartEntityBuilder.create();
             builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
 
-            // 각 파일 스트리밍 추가
+            // Add each file streaming
             for (Map.Entry<String, Path> entry : files.entrySet()) {
                 builder.addBinaryBody(
                         entry.getKey(),
@@ -65,7 +65,7 @@ public class NoTestCaseMultipartFileUpload {
             HttpEntity multipart = builder.build();
             uploadPost.setEntity(multipart);
 
-            // 요청 실행
+            // Execute request
             try (CloseableHttpResponse response = httpClient.execute(uploadPost)) {
                 int statusCode = response.getStatusLine().getStatusCode();
                 assertTrue(statusCode >= 200 && statusCode < 300, "Invalid response code: " + statusCode);

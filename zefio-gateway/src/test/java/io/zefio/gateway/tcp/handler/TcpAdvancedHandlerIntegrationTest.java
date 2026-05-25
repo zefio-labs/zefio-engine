@@ -37,7 +37,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * TCP 장전문(Chunk) 및 비즈니스 페이징(Pagination) 핸들러 극한 통합 테스트 (JDK 1.8 호환)
+ * TCP Long Message (Chunk) and Business Paging (Pagination) handler extreme integration test (JDK 1.8 compatible)
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -75,7 +75,7 @@ class TcpAdvancedHandlerIntegrationTest {
         reset(mockSender);
     }
 
-    // 🚀 [JDK 1.8 Helper] String.repeat(int) 대체 메서드
+    // 🚀 [JDK 1.8 Helper] Alternative method for String.repeat(int)
     private String repeat(String str, int count) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < count; i++) {
@@ -85,7 +85,7 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     // =========================================================================
-    // [PART 1] ChunkedResponseEncoder (장전문 분할 송신) 테스트
+    // [PART 1] ChunkedResponseEncoder (Long message split transmission) Test
     // =========================================================================
 
     private ChunkSplitterConfig createSplitterConfig(int maxChunkSize) {
@@ -102,7 +102,7 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     @Test
-    @DisplayName("[Splitter 정상] 대용량 메시지를 지정된 Max 크기에 맞춰 분할한다.")
+    @DisplayName("[Splitter Normal] Splits large messages according to the specified Max size.")
     void testChunkedEncoder_SplitSuccess() {
         ChunkSplitterConfig config = createSplitterConfig(30);
         ChunkedResponseEncoder encoder = new ChunkedResponseEncoder(mockUpstream, config, StandardCharsets.UTF_8, true, mockSender);
@@ -125,7 +125,7 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     // =========================================================================
-    // [PART 2] TcpMessageAggregatorHandler (장전문 수신 조립) 테스트
+    // [PART 2] TcpMessageAggregatorHandler (Long message reception assembly) Test
     // =========================================================================
 
     private ChunkAggregatorConfig createAggregatorConfig() {
@@ -141,7 +141,7 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     @Test
-    @DisplayName("[Aggregator 정상] START -> MIDDLE -> END 청크를 완벽히 조립한다.")
+    @DisplayName("[Aggregator Normal] Perfectly assembles START -> MIDDLE -> END chunks.")
     void testAggregator_AssembleSuccess() {
         when(mockHandlerDef.getAggregator()).thenReturn(createAggregatorConfig());
         TcpMessageAggregatorHandler handler = new TcpMessageAggregatorHandler(mockClientContext, mockHandlerDef);
@@ -158,13 +158,13 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     @Test
-    @DisplayName("[Aggregator 극한 방어] MaxMessageSize 초과 시 메모리 보호를 위해 버퍼를 초기화한다.")
+    @DisplayName("[Aggregator Extreme Defense] Initializes buffer to protect memory when MaxMessageSize is exceeded.")
     void testAggregator_ExceedMaxMessageSize() {
         when(mockHandlerDef.getAggregator()).thenReturn(createAggregatorConfig());
         TcpMessageAggregatorHandler handler = new TcpMessageAggregatorHandler(mockClientContext, mockHandlerDef);
         EmbeddedChannel channel = new EmbeddedChannel(handler);
 
-        // 🚀 [JDK 8 수정] String.repeat 대체
+        // 🚀 [JDK 8 Modification] String.repeat alternative
         channel.writeInbound(Unpooled.copiedBuffer(("HEADER00000000SSSS00" + repeat("A", 30)).getBytes(StandardCharsets.UTF_8)));
         channel.writeInbound(Unpooled.copiedBuffer(("HEADER00000000PP  00" + repeat("B", 50)).getBytes(StandardCharsets.UTF_8)));
         channel.writeInbound(Unpooled.copiedBuffer("HEADER00000000FFF 00END_DATA".getBytes(StandardCharsets.UTF_8)));
@@ -175,7 +175,7 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     // =========================================================================
-    // [PART 3] TcpLoopingPaginationHandler (비즈니스 페이징) 테스트
+    // [PART 3] TcpLoopingPaginationHandler (Business Paging) Test
     // =========================================================================
 
     private ChunkPaginationConfig createPaginationConfig(PaginationRequestStrategy strategy) {
@@ -192,14 +192,14 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     @Test
-    @DisplayName("[Pagination 정상] INCREMENT_PAGE 전략 검증")
+    @DisplayName("[Pagination Normal] INCREMENT_PAGE strategy verification")
     void testPagination_IncrementPage() {
         when(mockHandlerDef.getPagination()).thenReturn(createPaginationConfig(PaginationRequestStrategy.INCREMENT_PAGE));
         TcpLoopingPaginationHandler handler = new TcpLoopingPaginationHandler(mockClientContext, mockHandlerDef);
         EmbeddedChannel channel = new EmbeddedChannel(handler);
 
         channel.writeOutbound(Unpooled.copiedBuffer("REQ__01__DATA".getBytes(StandardCharsets.UTF_8)));
-        channel.readOutbound(); // 초기 요청 릴리즈
+        channel.readOutbound(); // Initial request release
 
         channel.writeInbound(Unpooled.copiedBuffer("RES_HEADER____1_____BODY_1".getBytes(StandardCharsets.UTF_8)));
 
@@ -216,16 +216,16 @@ class TcpAdvancedHandlerIntegrationTest {
     }
 
     // =========================================================================
-    // [PART 4] 극한의 엣지 케이스 (멀티바이트 및 타임아웃)
+    // [PART 4] Extreme Edge Cases (Multibyte and Timeout)
     // =========================================================================
 
     @Test
-    @DisplayName("[Splitter 극한 방어] 멀티바이트(한글) 경계선 분할 안전성 검증")
+    @DisplayName("[Splitter Extreme Defense] Verification of boundary split safety for multibyte (Korean)")
     void testChunkedEncoder_MultiByteSafeSplit() {
         ChunkSplitterConfig config = createSplitterConfig(30);
         ChunkedResponseEncoder encoder = new ChunkedResponseEncoder(mockUpstream, config, StandardCharsets.UTF_8, true, mockSender);
 
-        // "안녕하세요"는 UTF-8에서 15바이트. 청크 바디 10바이트 공간에 글자가 깨지지 않고 담겨야 함.
+        // "안녕하세요" is 15 bytes in UTF-8. The characters must be contained without breaking in the 10-byte chunk body space.
         String payload = "HEADER00000000000000" + "안녕하세요";
         Payload event = new ZefioMessage(payload.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
         ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);
@@ -236,12 +236,12 @@ class TcpAdvancedHandlerIntegrationTest {
         verify(mockSender, atLeastOnce()).sendChunk(eq(event), eq(ctx), chunkCaptor.capture());
 
         String chunk1 = new String(chunkCaptor.getAllValues().get(0), StandardCharsets.UTF_8);
-        // 한글 3글자(9바이트) + 1바이트 여백(버려짐) 확인
-        assertTrue(chunk1.endsWith("안녕하"), "글자 단위로 안전하게 잘려야 함");
+        // Verify 3 Korean characters (9 bytes) + 1 byte margin (discarded)
+        assertTrue(chunk1.endsWith("안녕하"), "Must be safely cut by character unit");
     }
 
     @Test
-    @DisplayName("[Aggregator 극한 방어] 청크 조립 타임아웃 발생 시 기존 버퍼 강제 회수")
+    @DisplayName("[Aggregator Extreme Defense] Forcefully evict existing buffer upon chunk assembly timeout")
     void testAggregator_TimeoutEviction() throws InterruptedException {
         ChunkAggregatorConfig config = createAggregatorConfig();
         config.setChunkTimeout(100);
@@ -252,7 +252,7 @@ class TcpAdvancedHandlerIntegrationTest {
 
         channel.writeInbound(Unpooled.copiedBuffer("HEADER00000000SSSS00START_DATA".getBytes(StandardCharsets.UTF_8)));
 
-        // 🚀 타임아웃 대기
+        // 🚀 Wait for timeout
         Thread.sleep(150);
 
         channel.writeInbound(Unpooled.copiedBuffer("HEADER00000000FFF 00END_DATA".getBytes(StandardCharsets.UTF_8)));
@@ -261,7 +261,7 @@ class TcpAdvancedHandlerIntegrationTest {
         String result = buf.toString(StandardCharsets.UTF_8);
         buf.release();
 
-        assertFalse(result.contains("START_DATA"), "타임아웃으로 인해 이전 데이터가 증발해야 함");
+        assertFalse(result.contains("START_DATA"), "Previous data must evaporate due to timeout");
         assertEquals("END_DATA", result);
     }
 }

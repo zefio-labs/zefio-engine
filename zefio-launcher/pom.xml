@@ -16,7 +16,7 @@
 		<maven.test.skip>true</maven.test.skip>
 
 		<java.env />
-		<java.opts>-Dapplication.version=@version@ -Dspring.config.location=classpath:/extreme-composite.yaml</java.opts>
+		<java.opts>-Dapplication.version=@version@ -Dspring.config.location=classpath:/application.yaml</java.opts>
 	</properties>
 
 	<dependencies>
@@ -63,7 +63,7 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
                     <includes>
-                        <include>**/*.class</include> <!-- 클래스 파일만 포함 -->
+                        <include>**/*.class</include>
                     </includes>
                 </configuration>
             </plugin>

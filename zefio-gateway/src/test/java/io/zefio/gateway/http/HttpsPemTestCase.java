@@ -10,7 +10,7 @@ import io.zefio.testsupport.payload.IPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("Https 2way 테스트")
+@DisplayName("Https 2-way test")
 public class HttpsPemTestCase extends UpstreamToIngressIntegrationTestCase {
     public HttpsPemTestCase() throws Exception {
         super("httpsInbound_pem", "httpsOutbound_pem");
@@ -36,7 +36,7 @@ public class HttpsPemTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Https 동기 송수신 테스트 (Pem)")
+    @DisplayName("Https synchronous transmission/reception test (Pem)")
     void testHttpUpstreamRequestResponse() throws Exception {
         send();
     }

@@ -1,14 +1,14 @@
 # ==============================================================================
-# 파일명: flows/flow-tryscope-conditional.yaml
-# 설  명: [Phase 4] SpEL 기반 조건부 폴백 및 RETRY 연쇄 검증
-# 시나리오:
-#   1. 내부 스코프에서 VALIDATOR로 강제 에러 발생
-#   2. 3회 자체 재시도(RETRY) 수행
-#   3. 최종 실패 시, SWITCH 라우터가 에러 타입을 분석하여 선택적 복구(Fallback) 수행
+# Filename: flows/flow-tryscope-conditional.yaml
+# Description: [Phase 4] SpEL-based conditional fallback and retry chain verification
+# Scenario:
+#   1. Force an error using VALIDATOR in the inner scope
+#   2. Perform 3 internal retries
+#   3. If final failure occurs, use SWITCH router to analyze error type and perform selective fallback
 # ==============================================================================
 flows:
   - name: tryscope-conditional-flow
-    label: "Phase 4 지능형 에러 제어 플로우"
+    label: "Phase 4 Intelligent Error Control Flow"
     options:
       threadPool:
         corePoolSize: 10
@@ -30,15 +30,15 @@ flows:
 
     steps:
       # ========================================================================
-      # 🛡️ 외곽 스코프: 에러를 무조건 낚아채서 플랜 B(fallback-steps)로 넘김
+      # 🛡️ Outer Scope: Intercepts all errors thrown from within and routes to Plan B (fallback-steps)
       # ========================================================================
       - name: outer-strategy-scope
         type: TRY_SCOPE
-        on-error: FALLBACK  # 🚀 내부에서 던진 에러를 모두 받음
+        on-error: FALLBACK  # 🚀 Catch all errors thrown from inner scopes
 
         steps:
           # ====================================================================
-          # 🔄 내부 스코프: 단순 재시도(Retry) 3회 반복 후 포기하면 THROW
+          # 🔄 Inner Scope: Simple retry (3 repeats) and throw if abandoned
           # ====================================================================
           - name: inner-retry-scope
             type: TRY_SCOPE
@@ -46,25 +46,25 @@ flows:
               enabled: true
               maxRetries: 3
               delay: 200
-            on-error: THROW # 🚀 3번 다 실패하면 상위(외곽)로 던짐
+            on-error: THROW # 🚀 Throw to outer scope if all 3 attempts fail
 
             steps:
               - name: force-validation-error
                 type: SpELValidatorInterceptor
                 config:
-                  condition: "#{false}" # 무조건 에러 유발
-                  # 💡 SpELValidatorFilter는 에러 발생 시 FlowResultStatus.VALIDATION_FAILED를 던집니다.
+                  condition: "#{false}" # Trigger error unconditionally
+                  # 💡 SpELValidatorFilter throws FlowResultStatus.VALIDATION_FAILED on error.
                   errorMessage: "Business Guardrail Violation"
                   errorStatus: "VALIDATION_FAILED"
 
         # ========================================================================
-        # 🚀 [v2.6 핵심] 조건부 폴백 라우팅 (SWITCH 활용)
+        # 🚀 Conditional Fallback Routing (Using SWITCH)
         # ========================================================================
         fallback-steps:
           - name: error-type-switch
             type: SWITCH
             cases:
-              # 💡 1. 발생한 예외가 'VALIDATION_FAILED'인 경우에만 복구 진행!
+              # 💡 1. Recover only if the exception is 'VALIDATION_FAILED'!
               - condition: "#{#exception != null and #exception.status.name() == 'VALIDATION_FAILED'}"
                 steps:
                   - name: conditional-fallback-restore
@@ -72,26 +72,26 @@ flows:
                     config:
                       assignments:
                         - target: "body['PREFIX']"
-                          expression: "#{'RES'}"       # 💡 안전한 SpEL 리터럴 포맷
+                          expression: "#{'RES'}"       # 💡 Safe SpEL literal format
                         - target: "body['TARGET_VAL']"
-                          expression: "#{'CND'}"       # Conditional Fallback 성공 마킹
+                          expression: "#{'CND'}"       # Mark successful conditional fallback
                         - target: "body['GLOBAL_TRX_ID']"
                           expression: "#{payload.trxID}"
 
-            # 💡 2. TIMEOUT이나 NETWORK_ERROR 등 조건에 맞지 않는 찐 장애일 경우
+            # 💡 2. For genuine system failures (TIMEOUT, NETWORK_ERROR, etc.), do not recover, continue with error response
             defaultSteps:
               - name: fallback-error-propagate
-                label: "치명적 장애 전문 조립"
+                label: "Assemble fatal error message"
                 type: SpELModifierInterceptor
                 config:
                   assignments:
-                    # 에러를 다시 던지지 않고, 그 자리에서 글로벌 에러 전문과 동일하게 조립
+                    # Assemble global error response without re-throwing the error
                     - target: "body['PREFIX']"
                       expression: "#{'ERR'}"
                     - target: "body['ERR_REASON']"
                       expression: "#{#exception != null ? #exception.message : 'Unknown System Error'}"
 
-    # 최상단 에러 핸들러 (안전망)
+    # Global Error Handler (Safety Net)
     on-error:
       - error-type: ANY
         refErrorHandler: fixederror

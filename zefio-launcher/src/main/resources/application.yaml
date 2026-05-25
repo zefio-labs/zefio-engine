@@ -1,7 +1,7 @@
 # ==============================================================================
-# 파일명: composite.yml
-# 설  명: Spring Boot 엔진 기동 시 가장 먼저 읽어 들이는 엔트리포인트.
-#         v2.5의 도메인 분할(Imports) 사상이 적용되어 있습니다.
+# Filename: application.yml
+# Description: Entry point read at Zefio/Spring Boot startup.
+#              Applied with domain-partitioning (Imports) philosophy.
 # ==============================================================================
 server:
   port: 52001
@@ -29,10 +29,10 @@ zefio:
   # Control Plane (CP) Telemetry Configuration
   # ==========================================
   cp:
-    api-url: http://192.168.0.11:3000
     enabled: true
+    api-url: http://127.0.0.1:3000
     redis:
-      url: redis://192.168.0.41:6379/0
+      url: redis://e000.bond:6379/0
     metrics:
       push-interval-ms: 3000
 
@@ -47,6 +47,7 @@ spring:
       - classpath:globals/global-options.yaml
       - classpath:globals/errors.yaml
 
+# Explicit Zefio Domain Imports
 imports:
   - "classpath:globals/endpoints.yaml"
   - "classpath:globals/monitor.yaml"
@@ -56,13 +57,13 @@ imports:
   - "classpath:globals/profiles.yaml"
   - "classpath:globals/telegrams.yaml"
 
-  - "classpath:flows/flow-router-modify.yaml"
-  - "classpath:flows/flow-switch-orchestration.yaml"
-  - "classpath:flows/flow-vm-modify.yaml"
-  - "classpath:flows/flow-tryscope-retry.yaml"
-  - "classpath:flows/flow-tryscope-conditional.yaml"
-  - "classpath:flows/flow-spel-loopback.yaml"
-
-  - "classpath:flows/flow-tryscope-basic.yaml"
-  - "classpath:flows/flow-scatter-basic.yaml"
-  - "classpath:flows/flow-extreme-composite.yaml"
+# Commented flows (Activated manually or via environment-specific profiles)
+#  - "classpath:flows/flow-extreme-composite.yaml"
+#  - "classpath:flows/flow-router-modify.yaml"
+#  - "classpath:flows/flow-scatter-basic.yaml"
+#  - "classpath:flows/flow-spel-loopback.yaml"
+#  - "classpath:flows/flow-switch-orchestration.yaml"
+#  - "classpath:flows/flow-tryscope-basic.yaml"
+#  - "classpath:flows/flow-tryscope-conditional.yaml"
+#  - "classpath:flows/flow-tryscope-retry.yaml"
+#  - "classpath:flows/flow-vm-modify.yaml"

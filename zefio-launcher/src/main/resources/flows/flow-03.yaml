@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "3번_TCP_TO_HTTP"
+    label: "3_TCP_TO_HTTP"
     options:
       threadPool:
         corePoolSize: 200
@@ -19,7 +19,7 @@ flows:
 
     ingress:
       name: from
-      label: "소스 수신(51003)"
+      label: "Source Inbound (51003)"
       type: TcpIngress
       telegram: fixed-standard
       profile: ingress-sync
@@ -30,7 +30,7 @@ flows:
         responseEncoding: utf-8
     steps:
       - name: to
-        label: "타겟 요청(HTTP)"
+        label: "Target Request (HTTP)"
         type: HttpUpstream
         telegram: fixed-standard
         profile: upstream-sync-massive
@@ -40,7 +40,7 @@ flows:
         config:
           host: 192.168.3.218
           port: 51103
-          # 비즈니스 전용 HTTP 라우팅 속성
+          # HTTP routing properties for business use
           requestContentType: text/plain
           requestHttpMethod: POST
           requestPath: service/

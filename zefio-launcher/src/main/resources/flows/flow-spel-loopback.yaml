@@ -1,10 +1,10 @@
 # ==============================================================================
-# 파일명: flows/flow-spel-loopback.yaml
-# 설  명: [v2.6] SpEL 기반 Loopback 자가 검증 플로우 (송/수신 통합)
+# Filename: flows/flow-spel-loopback.yaml
+# Description: SpEL-based Loopback self-verification flow (integrated Send/Receive)
 # ==============================================================================
 flows:
   # ============================================================================
-  # 🚀 [Flow A] 송신자: SpEL 연금술사 (에러 격리 및 지능형 복구)
+  # 🚀 [Flow A] Sender: The SpEL Alchemist (Error Isolation and Intelligent Recovery)
   # ============================================================================
   - name: loopback-sender-flow
     ingress:
@@ -27,13 +27,13 @@ flows:
       - name: strategy-scope
         type: TRY_SCOPE
 
-        # 🔄 [시간의 축] 2회 재시도 (자가 호출이므로 짧게 설정)
+        # 🔄 [Axis of Time] Retry twice (set short as it is a self-call)
         retry:
           enabled: true
           maxRetries: 2
           delay: 500
 
-        # 🛡️ [공간의 축] 에러 발생 시 일단 우회 경로로 확보
+        # 🛡️ [Axis of Space] Secure bypass path on error
         on-error: FALLBACK
 
         steps:
@@ -44,7 +44,7 @@ flows:
             exchangePattern: RequestReply
             config:
               host: "localhost"
-              port: 52008 # 🎯 같은 프로세스의 Flow B를 타겟팅
+              port: 52008 # 🎯 Targets Flow B in the same process
               requestHttpMethod: POST
               requestPath: "/base/test/#{body.TARGET_VAL}"
               requestHeaderKeyValues:
@@ -52,12 +52,12 @@ flows:
                 X-GEN-DATE: "#{T(java.time.LocalDate).now().toString()}"
                 X-TID: "#{payload.trxID}"
 
-        # 🚑 [우회 경로] 에러 타입을 분석하여 선택적 복구 진행
+        # 🚑 [Bypass Path] Analyze error types for selective recovery
         fallback-steps:
           - name: fallback-router
             type: SWITCH
             cases:
-              # 💡 [Phase 4 진화] REMOTE_CLIENT/SERVER 에러인 경우에만 성공으로 마킹
+              # 💡 [Phase 4 Evolution] Mark as success only if it is a REMOTE_CLIENT/SERVER error
               - condition: "#{#exception != null and #exception.status.name().startsWith('REMOTE_')}"
                 steps:
                   - name: fallback-success-mark
@@ -69,17 +69,17 @@ flows:
                         - target: "body['DUMMY_HEADER']"
                           expression: "#{'Resolved via Conditional Fallback'}"
 
-            # 💡 그 외의 에러(TIMEOUT 등)는 복구하지 않고 그대로 에러 응답 (Default)
+            # 💡 Other errors (TIMEOUT, etc.) are not recovered and returned as error responses (Default)
             defaultSteps:
               - name: fatal-error-log
                 type: LoggingInterceptor
                 config: { message: "Critical System Error in Loopback: #{#exception.message}" }
 
   # ============================================================================
-  # 📥 [Flow B] 수신자: 데이터 검증 및 응답기 (가상 타겟)
+  # 📥 [Flow B] Receiver: Data Verification and Responder (Virtual Target)
   # ============================================================================
   - name: temp-outbound-flow
-    label: "아웃바운드 수신용 가상 타겟"
+    label: "Virtual target for inbound reception"
     ingress:
       name: loopback-receiver-52008
       type: HttpIngress
@@ -93,9 +93,9 @@ flows:
     steps:
       - name: verify-received-headers
         type: LoggingInterceptor
-        label: "전송된 SpEL 헤더 로그 확인"
+        label: "Check logs for received SpEL headers"
 
-      # 🔥 에러 시뮬레이터: TARGET_VAL이 'ERR'이면 423(VALIDATION_FAILED) 투척
+      # 🔥 Error Simulator: Throws 423 (VALIDATION_FAILED) if TARGET_VAL is 'ERR'
       - name: force-error-generator
         type: SpELValidatorInterceptor
         config:
@@ -110,7 +110,7 @@ flows:
             - target: "body['PREFIX']"
               expression: "ACK"
 
-    # 💥 최상단 글로벌 에러 핸들러 (수신자용)
+    # 💥 Global Error Handler (Receiver side)
     on-error:
       - error-type: ANY
         refErrorHandler: fixederror

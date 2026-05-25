@@ -1,6 +1,6 @@
 flows:
   - name: inbound
-    label: "5번_TCP_고대기열_중계"
+    label: "5_TCP_High_Queue_Relay"
     options:
       threadPool:
         corePoolSize: 300
@@ -17,10 +17,10 @@ flows:
       ioQueue:
         capacity: 50000
 
-    # 🎯 수신부: 비동기(async, telegram matching)
+    # 🎯 Ingress: Asynchronous (Async, Telegram matching)
     ingress:
       name: from
-      label: "소스 수신(51005)"
+      label: "Source Inbound (51005)"
       type: TcpIngress
       telegram: fixed-standard
       profile: ingress-async
@@ -30,10 +30,10 @@ flows:
         requestEncoding: utf-8
         responseEncoding: utf-8
 
-    # 🎯 송신부: 비동기(async, telegram matching) 10 Pool
+    # 🎯 Upstream: Asynchronous (Async, Telegram matching) 10 Pool
     steps:
       - name: to
-        label: "타겟 요청(TCP_Small)"
+        label: "Target Request (TCP_Small)"
         type: TcpUpstream
         telegram: fixed-standard
         profile: upstream-async-standard

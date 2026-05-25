@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@DisplayName("Http 2way 테스트")
+@DisplayName("Http 2-way test")
 public class HttpFixedTestCase extends UpstreamToIngressIntegrationTestCase {
     public HttpFixedTestCase() throws Exception {
         super("httpInbound_fixed", "httpOutbound_fixed");
@@ -50,7 +50,7 @@ public class HttpFixedTestCase extends UpstreamToIngressIntegrationTestCase {
     }
 
     @Test
-    @DisplayName("Http 동기 송수신 테스트 (Fixed 전문 처리)")
+    @DisplayName("Http synchronous transmission/reception test (Fixed message processing)")
     void testHttpUpstreamRequestResponse() throws Exception {
         send();
     }

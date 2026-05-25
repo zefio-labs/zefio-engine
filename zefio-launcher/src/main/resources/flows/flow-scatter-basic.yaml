@@ -1,10 +1,10 @@
 # ==============================================================================
-# 파일명: flows/flow-scatter-basic.yaml
-# 설  명: [v2.6] SCATTER_GATHER 병렬 취합 및 계층형 에러 제어 검증
+# Filename: flows/flow-scatter-basic.yaml
+# Description: SCATTER_GATHER parallel aggregation and hierarchical error control verification
 # ==============================================================================
 flows:
   - name: scatter-basic-flow
-    label: "SCATTER_GATHER 단일 검증 플로우"
+    label: "SCATTER_GATHER Single Validation Flow"
     options:
       threadPool:
         corePoolSize: 10
@@ -13,7 +13,7 @@ flows:
 
     ingress:
       name: from-client-scatter-51002
-      label: "HTTP 클라이언트 수신"
+      label: "HTTP Client Inbound"
       type: HttpIngress
       telegram: fixed-http-req
       profile: ingress-sync-alt
@@ -30,22 +30,22 @@ flows:
 
     steps:
       # ========================================================================
-      # 🛡️ 외곽 스코프: 병렬 처리 전체 과정에서 터지는 예외 격리
+      # 🛡️ Outer Scope: Isolate exceptions occurring during the parallel process
       # ========================================================================
       - name: scatter-isolation-scope
         type: TRY_SCOPE
-        on-error: FALLBACK # 🚀 전체 취합 실패 시 우회 경로 실행
+        on-error: FALLBACK # 🚀 Execute bypass path if total aggregation fails
 
         steps:
           - name: basic-scatter-gather
             type: SCATTER_GATHER
-            label: "3개 브랜치 병렬 실행 및 취합"
+            label: "Parallel execution and aggregation of 3 branches"
             config:
               timeout: 3000
-              aggregationType: MAP_MERGE  # 브랜치 결과를 Map으로 묶어 직렬화
-              errorPolicy: FAIL_FAST # 💡 하나라도 터지면 TRY_SCOPE 가 작동하게 함
+              aggregationType: MAP_MERGE  # Serialize branch results into a Map
+              errorPolicy: FAIL_FAST # 💡 Trigger TRY_SCOPE if any branch fails
             steps:
-              # 🌿 브랜치 1: 성공 (단순 통과)
+              # 🌿 Branch 1: Success (Pass-through)
               - name: branch-a-success
                 type: SpELModifierInterceptor
                 config:
@@ -53,23 +53,23 @@ flows:
                     - target: "payload.headers['BRANCH_A']"
                       expression: "#{'SUCCESS'}"
 
-              # 🔥 브랜치 B: 재시도 후 에러 발생 (TRY_SCOPE 중첩)
+              # 🔥 Branch B: Error after retry (Nested TRY_SCOPE)
               - name: branch-b-retry-scope
                 type: TRY_SCOPE
                 retry:
-                  enabled: true # 🚀 [핵심] 브랜치별로 재시도 여부 결정
+                  enabled: true # 🚀 [Key] Decide retry policy per branch
                   maxRetries: 3
                   delay: 200
-                on-error: THROW # 💡 3번 다 실패하면 Scatter에게 에러 보고
+                on-error: THROW # 💡 Report error to Scatter if all 3 retries fail
                 steps:
                   - name: branch-b-fail
                     type: SpELValidatorInterceptor
                     config:
                       condition: "#{false}"
                       errorMessage: "Forced Error in Branch B"
-                      errorStatus: "TIMEOUT" # 💡 재시도를 유발하기 위해 TIMEOUT 위장
+                      errorStatus: "TIMEOUT" # 💡 Faked as TIMEOUT to trigger retries
 
-              # 🌿 브랜치 3: 성공 (단순 통과)
+              # 🌿 Branch 3: Success (Pass-through)
               - name: branch-c-success
                 type: SpELModifierInterceptor
                 config:
@@ -77,7 +77,7 @@ flows:
                     - target: "payload.headers['BRANCH_C']"
                       expression: "#{'SUCCESS'}"
 
-        # 🚑 [전체 우회 경로] 취합된 데이터가 엉망이거나 에러 시 복구 로직
+        # 🚑 [Global Bypass Path] Recovery logic if data is corrupted or an error occurs
         fallback-steps:
           - name: fallback-restore-format
             type: SpELModifierInterceptor
@@ -92,7 +92,7 @@ flows:
                 - target: "body['GLOBAL_TRX_ID']"
                   expression: "#{payload.trxID}"
 
-      # 📊 최종 결과 로그 확인
+      # 📊 Log final merged result
       - name: log-merged-body
         type: LoggingInterceptor
         config: { }

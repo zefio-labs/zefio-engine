@@ -1,11 +1,10 @@
 # ==============================================================================
-# 파일명: flows/flow-switch-orchestration.yaml
-# 설  명: [v2.6] SwitchProcessor 기반 지능형 라우팅 및 계층형 에러 제어
+# Filename: flows/flow-switch-orchestration.yaml
+# Description: Intelligent routing based on SwitchProcessor and hierarchical error control
 # ==============================================================================
 flows:
   - name: flow-switch-main
-    label: "SpEL 지능형 스위치 라우터 테스트 플로우"
-    # options: 생략 (Core 50 / Max 100 디폴트 스레드풀 자동 적용 검증)
+    label: "SpEL Intelligent Switch Router Test Flow"
 
     ingress:
       name: from-http-switch-51003
@@ -24,7 +23,7 @@ flows:
         transactionTimeoutMillis: 40000
 
     steps:
-      # [Step 1] 가드레일: 1차 방어선 (ABC가 아니면 차단)
+      # [Step 1] Guardrail: First line of defense (Block if not 'ABC')
       - name: validate-payload
         type: SpELValidatorInterceptor
         config:
@@ -32,7 +31,7 @@ flows:
           errorMessage: "Guardrail Blocked"
           errorStatus: "VALIDATION_FAILED"
 
-      # [Step 2] 데이터 연금술: 바디 변조 및 컨텍스트 생성 🚀 (이게 빠져있었습니다!)
+      # [Step 2] Data Alchemy: Body mutation and context generation 🚀
       - name: modify-fixed-body
         type: SpELModifierInterceptor
         config:
@@ -46,12 +45,12 @@ flows:
             - target: "payload.headers['USER_LEVEL']"
               expression: "#{body['GLOBAL_TRX_ID'].startsWith('VIP') ? 'GOLD' : 'SILVER'}"
 
-      # [Step 3] SWITCH: 지능형 오케스트레이터 (v2.6 에러 방어막 버전)
+      # [Step 3] SWITCH: Intelligent Orchestrator
       - name: main-switch-router
         type: SWITCH
         cases:
           # ────────────────────────────────────────────────────────────────────
-          # [Case 1] VIP 고액 거래: 5회 재시도 및 폴백 적용
+          # [Case 1] VIP High-Value Transaction: 5 retries and fallback applied
           # ────────────────────────────────────────────────────────────────────
           - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD' and payload.headers['REQ_AMT'] > 100000}"
             steps:
@@ -76,9 +75,9 @@ flows:
                           expression: "#{'VIP_SERVICE_TEMPORARILY_UNAVAILABLE'}"
 
           # ────────────────────────────────────────────────────────────────────
-          # [Case 2] 정규식 기반 Mobile 필터링: 3회 재시도 및 로깅
+          # [Case 2] Regex-based Mobile Filtering: 3 retries and logging
           # ────────────────────────────────────────────────────────────────────
-          - condition: "#{body['PREFIX'] matches '^[M][0-9]{2}$'}" # M01, M02 등 매칭
+          - condition: "#{body['PREFIX'] matches '^[M][0-9]{2}$'}" # Matches M01, M02, etc.
             steps:
               - name: mobile-scope
                 type: TRY_SCOPE
@@ -86,7 +85,7 @@ flows:
                   enabled: true
                   maxRetries: 3
                   delay: 500
-                on-error: THROW # 💡 모바일 장애는 중요하므로 상위 DLQ로 던짐
+                on-error: THROW # 💡 Mobile failures are critical; throw to parent DLQ
                 steps:
                   - name: mobile-logger
                     type: LoggingInterceptor
@@ -97,7 +96,7 @@ flows:
                       targetFlowExpression: "#{'flow-target-json'}"
 
           # ────────────────────────────────────────────────────────────────────
-          # [Case 3] 일반 거래 (XYZ 변환 완료 건): 표준 호출
+          # [Case 3] Standard Transaction (XYZ conversion complete): Standard call
           # ────────────────────────────────────────────────────────────────────
           - condition: "#{body['TARGET_VAL'] == 'ABC'}"
             steps:
@@ -107,7 +106,7 @@ flows:
                   targetFlowExpression: "#{'flow-target-json'}"
 
         # ──────────────────────────────────────────────────────────────────────
-        # [Default] 모든 조건 불일치 시: 안전한 Fallback 경로
+        # [Default] No match found: Safe fallback path
         # ──────────────────────────────────────────────────────────────────────
         defaultSteps:
           - name: default-fallback-logger
@@ -118,38 +117,36 @@ flows:
             config:
               targetFlowExpression: "#{'flow-target-json'}"
 
-    # 최상단 글로벌 에러 핸들러 (Flow Level DLQ)
+    # Global Error Handler (Flow Level DLQ)
     on-error:
       - error-type: ANY
         refErrorHandler: fixederror
 
-
   # ==============================================================================
-  # 🚀 [Sub-Flow 1] XML 타겟 전담 마이크로서비스
+  # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
   # ==============================================================================
   - name: flow-target-xml
-    label: "XML 엔드포인트 전담 중계 플로우"
+    label: "XML Endpoint Dedicated Relay Flow"
     ingress:
       name: vm-inbound-xml
-      type: LocalIngress                 # 내부 통신용 더미 타입
-      telegram: fixed-http-req   # 메인 플로우와 동일한 텔레그램 스펙 유지
+      type: LocalIngress
+      telegram: fixed-http-req
       exchangePattern: RequestReply
     steps:
       - name: call-global-xml
-        label: "글로벌 XML 엔드포인트 호출"
+        label: "Call Global XML Endpoint"
         type: SpELRouterInterceptor
         config:
           routingRules:
-            # 💡 서브 플로우 내부에서는 무조건(#{true}) 매핑된 글로벌 엔드포인트를 호출합니다.
             - name: "Direct to XML Endpoint"
               condition: "#{true}"
               refModuleName: "to-xml"
 
   # ==============================================================================
-  # 🚀 [Sub-Flow 2] JSON 타겟 전담 마이크로서비스
+  # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
   # ==============================================================================
   - name: flow-target-json
-    label: "JSON 엔드포인트 전담 중계 플로우"
+    label: "JSON Endpoint Dedicated Relay Flow"
     ingress:
       name: vm-inbound-json
       type: LocalIngress
@@ -157,11 +154,10 @@ flows:
       exchangePattern: RequestReply
     steps:
       - name: call-global-json
-        label: "글로벌 JSON 엔드포인트 호출"
+        label: "Call Global JSON Endpoint"
         type: SpELRouterInterceptor
         config:
           routingRules:
-            # 💡 서브 플로우 내부에서는 무조건(#{true}) 매핑된 글로벌 엔드포인트를 호출합니다.
             - name: "Direct to JSON Endpoint"
               condition: "#{true}"
               refModuleName: "to-json"

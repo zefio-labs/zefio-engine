@@ -1,101 +1,101 @@
 # ==============================================================================
-# 파일명: flows/flow-extreme-composite.yaml
-# 설  명: [v2.6 Finale] Try + SG + Switch + Double Fallback 풀 결합 플로우
+# Filename: flows/flow-extreme-composite.yaml
+# Description: Fully integrated flow combining Try + SG + Switch + Double Fallback
 # ==============================================================================
 flows:
   - name: extreme-orchestration-flow
-    label: "코어 엔진 3대장(Try, SG, Switch) 풀 결합 플로우"
+    label: "Core Engine 3 Pillars (Try, SG, Switch) Fully Integrated Flow"
     options:
       threadPool:
-        # 🚀 [결정적 처방] 순간적인 600개 이상의 스레드 폭발을 넉넉히 감당하도록 코어를 대폭 상향!
+        # 🚀 [Deterministic Prescription] Increased core size significantly to handle instantaneous bursts of 600+ threads!
         corePoolSize: 1000
         maxPoolSize: 2000
-        queueCapacity: 100 # 큐를 줄여서 스레드가 즉시즉시 스케일업 되도록 유도
+        queueCapacity: 100 # Reduced queue to induce immediate thread scale-up
 
     ingress:
       name: from-client-extreme-51000
-      label: "HTTP 클라이언트 수신 (포트 분리)"
+      label: "HTTP Client Inbound (Isolated Port)"
       type: HttpIngress
       telegram: fixed-http-req
-      exchangePattern: RequestReply      # 🚀 [필수] 무한 대기(Stuck) 방지를 위한 양방향 계약
+      exchangePattern: RequestReply      # 🚀 [Mandatory] Bidirectional contract to prevent infinite wait (Stuck)
       config:
-        port: 51000                # 테스트 포트 충돌 방지
+        port: 51000                # Avoid port collisions for tests
         requestEncoding: utf-8
         responseEncoding: utf-8
 
     steps:
       # ────────────────────────────────────────────────────────────────────────
-      # 🎯 0단계: 런타임 컨텍스트 주입 (연금술)
-      # 뒤이어 나올 SWITCH가 판단할 수 있도록 사전에 상태값을 세팅합니다.
+      # 🎯 Stage 0: Runtime Context Injection (Alchemy)
+      # Sets status values in advance so the following SWITCH can evaluate them.
       # ────────────────────────────────────────────────────────────────────────
       - name: init-transaction-context
         type: SpELModifierInterceptor
         config:
           assignments:
             - target: "payload.headers['USER_LEVEL']"
-              # 💡 [핵심] body['GLOBAL_TRX_ID'] 가 null이 아님을 먼저 확인한 후 startsWith를 호출합니다.
-              # 이렇게 하면 조건식이 명확히 boolean(true/false)으로 평가됩니다.
+              # 💡 [Core] First check if body['GLOBAL_TRX_ID'] is not null before calling startsWith.
+              # This ensures the condition evaluates clearly to boolean (true/false).
               expression: "#{(body['GLOBAL_TRX_ID'] != null and body['GLOBAL_TRX_ID'].startsWith('VIP')) ? 'GOLD' : 'SILVER'}"
 
       # ────────────────────────────────────────────────────────────────────────
-      # 🎯 1단계 (Depth 1): 전체 매크로 타임아웃 및 재시도 방어선 (TRY_SCOPE)
+      # 🎯 Stage 1 (Depth 1): Global Macro Timeout and Retry Defense (TRY_SCOPE)
       # ────────────────────────────────────────────────────────────────────────
       - name: macro-retry-scope
         type: TRY_SCOPE
-        label: "전체 프로세스 재시도 스코프"
+        label: "Global Process Retry Scope"
         retry:
           enabled: true
           maxRetries: 2
           delay: 100
-          on-error: THROW # 🚀 2번 다 실패하면 글로벌 DLQ로 던짐
+          on-error: THROW # 🚀 Throw to global DLQ if failed twice
 
         steps:
 
           # ────────────────────────────────────────────────────────────────────
-          # 🎯 2단계 (Depth 2): 복합 데이터 취합 엔진 (SCATTER_GATHER)
+          # 🎯 Stage 2 (Depth 2): Composite Data Gathering Engine (SCATTER_GATHER)
           # ────────────────────────────────────────────────────────────────────
           - name: credit-agency-gather
             type: SCATTER_GATHER
-            label: "3대 신용평가기관 병렬 취합"
+            label: "Parallel Collection from 3 Credit Agencies"
             config:
-              timeout: 3000             # 전체 3초 컷오프
+              timeout: 3000             # 3-second global cutoff
               aggregationType: MAP_MERGE
-              errorPolicy: BEST_EFFORT  # 🔥 에러가 나도 삼키고 진행!
+              errorPolicy: BEST_EFFORT  # 🔥 Proceed even if errors occur!
 
             steps:
-              # 🌿 브랜치 1 (Depth 3): 고객 등급에 따른 지능형 라우팅 (SWITCH) 🚀 [신규 추가]
+              # 🌿 Branch 1 (Depth 3): Intelligent Routing based on User Grade (SWITCH) 🚀 [Newly Added]
               - name: agency-a-smart-router
                 type: SWITCH
-                label: "고객 등급별 A기관 분기 라우터"
+                label: "Routing Router by User Grade for Agency A"
                 cases:
-                  # VIP 고객은 정밀한 XML 전용 서비스 호출
+                  # VIP customers call precision-tuned XML-only service
                   - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD'}"
                     steps:
                       - name: agency-a-premium
                         type: DynamicLocalUpstream
                         config:
                           targetFlowExpression: "#{'flow-target-xml'}"
-                # 일반 고객은 경량화된 JSON 서비스 호출
+                # Regular customers call lightweight JSON service
                 defaultSteps:
                   - name: agency-a-standard
                     type: DynamicLocalUpstream
                     config:
                       targetFlowExpression: "#{'flow-target-json'}"
 
-              # 🌿 브랜치 2 (Depth 3): 에러 격리 및 로컬 캐시 복구 (TRY_SCOPE)
+              # 🌿 Branch 2 (Depth 3): Error Isolation and Local Cache Recovery (TRY_SCOPE)
               - name: agency-b-unstable-scope
                 type: TRY_SCOPE
-                on-error: FALLBACK # 🚀 에러 나면 캐시 데이터로 치료
+                on-error: FALLBACK # 🚀 Trigger recovery with cached data on error
                 steps:
-                  # 실제 통신 대신 VALIDATOR를 사용해 무조건 에러(장애)를 유발시킴
+                  # Force an error using VALIDATOR instead of real communication
                   - name: call-agency-b-fail
                     type: SpELValidatorInterceptor
                     config:
-                      condition: "#{false}" # 🔥 강제 에러 발생
+                      condition: "#{false}" # 🔥 Forced error trigger
                       errorMessage: "Agency B Connection Timeout"
-                      errorStatus: "TIMEOUT" # 재시도 트리거용
+                      errorStatus: "TIMEOUT" # Trigger for retry
                 fallback-steps:
-                  # 에러 발생 시, 로컬 Redis를 대체하여 컨텍스트에 캐시 데이터를 꽂아넣음
+                  # Inject cached data into context, replacing local Redis upon failure
                   - name: fallback-cache-b
                     type: SpELModifierInterceptor
                     config:
@@ -103,12 +103,12 @@ flows:
                         - target: "payload.headers['AGENCY_B_FALLBACK']"
                           expression: "#{'CACHE_DATA_LOADED'}"
 
-              # 🌿 브랜치 3 (Depth 3): 중첩 병렬 처리 (SCATTER_GATHER)
+              # 🌿 Branch 3 (Depth 3): Nested Parallel Processing (SCATTER_GATHER)
               - name: agency-c-composite
                 type: SCATTER_GATHER
                 config:
-                  aggregationType: OVERRIDE  # 🔥 덮어쓰기 전략
-                  errorPolicy: FAIL_FAST     # 하나라도 실패하면 브랜치 3 전체 실패
+                  aggregationType: OVERRIDE  # 🔥 Overwrite strategy
+                  errorPolicy: FAIL_FAST     # Fail entire branch 3 if any child fails
                 steps:
                   - name: agency-c-auth
                     type: SpELModifierInterceptor
@@ -122,14 +122,14 @@ flows:
                       targetFlowExpression: "#{'flow-target-json'}"
 
       # ────────────────────────────────────────────────────────────────────────
-      # 🎯 3단계 (Depth 1): 최종 데이터 저장 및 이중 폴백 (Double Fallback)
+      # 🎯 Stage 3 (Depth 1): Final Data Storage and Double Fallback
       # ────────────────────────────────────────────────────────────────────────
       - name: final-save-scope
         type: TRY_SCOPE
-        label: "최종 결과 DB 저장 (더블 폴백)"
-        on-error: FALLBACK # 🚀 Main DB 실패 시 Plan-B 가동
+        label: "Final Result DB Storage (Double Fallback)"
+        on-error: FALLBACK # 🚀 Activate Plan-B if Main DB fails
         steps:
-          # Main DB 장애 시뮬레이션 (무조건 실패)
+          # Main DB failure simulation (Always fails)
           - name: save-to-main-db
             type: SpELValidatorInterceptor
             config:
@@ -138,10 +138,10 @@ flows:
               errorStatus: "DATABASE_ERROR"
 
         fallback-steps:
-          # 🔥 [Fallback 1] Sub DB 시도
+          # 🔥 [Fallback 1] Try Sub DB
           - name: fallback-sub-db-scope
             type: TRY_SCOPE
-            on-error: FALLBACK # 🚀 Sub DB도 실패하면 Plan-C 가동
+            on-error: FALLBACK # 🚀 Activate Plan-C if Sub DB fails
             steps:
               - name: save-to-sub-db
                 type: SpELValidatorInterceptor
@@ -151,7 +151,7 @@ flows:
                   errorStatus: "DATABASE_ERROR"
 
             fallback-steps:
-              # 🔥 [Fallback 2] 최후의 보루: 로컬 파일 적재
+              # 🔥 [Fallback 2] Last Resort: Write to Local File Log
               - name: save-to-local-file-log
                 type: LoggingInterceptor
                 config: { }
@@ -162,18 +162,18 @@ flows:
                     - target: "body['PREFIX']"
                       expression: "#{'RES'}"
                     - target: "body['TARGET_VAL']"
-                      expression: "#{'FBK'}" # 폴백 성공 마킹
+                      expression: "#{'FBK'}" # Mark fallback success
 
       # ────────────────────────────────────────────────────────────────────────
-      # 🚀 4단계 [결정적 처방]: 출구 규격 복원 (Format Restoration)
-      # Map 변환 시도로 인한 타입 에러를 원천 차단하고,
-      # SpEL 내에서 즉시 String.format을 호출해 96바이트 규격을 완벽히 조립합니다!
+      # 🚀 Stage 4 [Deterministic Prescription]: Format Restoration
+      # Blocks type errors caused by Map transformation attempts,
+      # and calls String.format inside SpEL to assemble the 96-byte spec perfectly!
       # ────────────────────────────────────────────────────────────────────────
       - name: restore-fixed-format
         type: SpELModifierInterceptor
         config:
           assignments:
-            # 💡 [중요] 모든 폴백을 뚫고 나온 마지막 관문에서도 확실하게 규격을 세탁합니다.
+            # 💡 [Important] Certain "Spec Laundry" at the final gate, even after bypassing all fallbacks
             - target: "body['PREFIX']"
               expression: "#{body['PREFIX'] == 'RES' ? 'RES' : 'ERR'}"
             - target: "body['TARGET_VAL']"
@@ -182,7 +182,7 @@ flows:
               expression: "#{payload.trxID}"
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 🎯 Flow Level Error Handler (글로벌 DLQ)
+    # 🎯 Flow Level Error Handler (Global DLQ)
     # ──────────────────────────────────────────────────────────────────────────
     on-error:
       - error-type: ANY
@@ -190,31 +190,31 @@ flows:
 
 
   # ==============================================================================
-  # 🚀 [Sub-Flow 1] XML 타겟 전담 마이크로서비스
+  # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
   # ==============================================================================
   - name: flow-target-xml
-    label: "XML 엔드포인트 전담 중계 플로우"
+    label: "XML Endpoint Dedicated Relay Flow"
     ingress:
       name: vm-inbound-xml
-      type: LocalIngress                 # 내부 통신용 더미 타입
-      telegram: fixed-http-req   # 메인 플로우와 동일한 텔레그램 스펙 유지
+      type: LocalIngress                 # Internal dummy type
+      telegram: fixed-http-req   # Maintain identical telegram spec with main flow
       exchangePattern: RequestReply
     steps:
       - name: call-global-xml
-        label: "글로벌 XML 엔드포인트 호출"
+        label: "Call Global XML Endpoint"
         type: SpELRouterInterceptor
         config:
           routingRules:
-            # 💡 서브 플로우 내부에서는 무조건(#{true}) 매핑된 글로벌 엔드포인트를 호출합니다.
+            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
             - name: "Direct to XML Endpoint"
               condition: "#{true}"
               refModuleName: "to-xml"
 
   # ==============================================================================
-  # 🚀 [Sub-Flow 2] JSON 타겟 전담 마이크로서비스
+  # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
   # ==============================================================================
   - name: flow-target-json
-    label: "JSON 엔드포인트 전담 중계 플로우"
+    label: "JSON Endpoint Dedicated Relay Flow"
     ingress:
       name: vm-inbound-json
       type: LocalIngress
@@ -222,11 +222,11 @@ flows:
       exchangePattern: RequestReply
     steps:
       - name: call-global-json
-        label: "글로벌 JSON 엔드포인트 호출"
+        label: "Call Global JSON Endpoint"
         type: SpELRouterInterceptor
         config:
           routingRules:
-            # 💡 서브 플로우 내부에서는 무조건(#{true}) 매핑된 글로벌 엔드포인트를 호출합니다.
+            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
             - name: "Direct to JSON Endpoint"
               condition: "#{true}"
               refModuleName: "to-json"

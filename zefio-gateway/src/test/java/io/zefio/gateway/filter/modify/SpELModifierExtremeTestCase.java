@@ -42,7 +42,7 @@ public class SpELModifierExtremeTestCase {
     @BeforeEach
     void setUp() throws Exception {
         // =====================================================================
-        // 🚀 1. Mock Telegram 메타데이터 생성 및 빌더에 주입
+        // 🚀 1. Create Mock Telegram metadata and inject it into the builder
         // =====================================================================
         Telegram fixedTg =
                 org.mockito.Mockito.mock(Telegram.class);
@@ -51,7 +51,7 @@ public class SpELModifierExtremeTestCase {
         when(mockBuilder.getTelegram()).thenReturn(fixedTg);
 
         // =====================================================================
-        // 🚀 2. 글로벌 팩토리에 Mock 빌더 전역 등록
+        // 🚀 2. Register Mock builder globally in the global factory
         // =====================================================================
         TelegramFactory.clear();
         TelegramFactory.register("mock-fixed", mockBuilder);
@@ -65,7 +65,7 @@ public class SpELModifierExtremeTestCase {
         bodyMap.put("id", "TX001");
         bodyMap.put("amt", 1000L);
 
-        // 🚀 [지옥 시뮬레이션] 프로퍼티를 의도적으로 ImmutableMap으로 구성
+        // 🚀 [Hell Simulation] Intentionally construct properties as ImmutableMap
         Map<String, Object> immProps = new HashMap<>();
         immProps.put("env", "PROD");
         immProps.put("sysEnv", "PROD");
@@ -74,8 +74,8 @@ public class SpELModifierExtremeTestCase {
         payload.setTelegramName("mock-fixed");
         payload.setTrxID("TRX-999");
 
-        // Mock의 properties가 Immutable을 반환하도록 설정하거나,
-        // 실제 ZefioMessage 내부 로직을 타고 setProperty를 수행하도록 설정
+        // Set Mock's properties to return Immutable,
+        // or configure it to perform setProperty using the actual internal logic of ZefioMessage
         immProps.forEach(payload::setHeader);
 
         when(mockBuilder.parseToMap(any(), any())).thenReturn(bodyMap);
@@ -98,11 +98,11 @@ public class SpELModifierExtremeTestCase {
     }
 
     @Nested
-    @DisplayName("[Batch 3] 컨텍스트 전이(Alchemy) - 50 Cases")
+    @DisplayName("[Batch 3] Context Transition (Alchemy) - 50 Cases")
     class AlchemyBatch {
         @Test void test() throws Exception {
             Map<String, String> m = new LinkedHashMap<>();
-            // 🚀 [수정] event.properties -> payload.headers
+            // 🚀 [Modified] event.properties -> payload.headers
             m.put("payload.headers['bak_id']", "#{body['id']}");
             m.put("body['header_env']", "#{payload.headers['sysEnv']}");
             m.put("payload.headers['new_flag']", "#{true}");
@@ -116,11 +116,11 @@ public class SpELModifierExtremeTestCase {
     }
 
     @Nested
-    @DisplayName("[Batch 4] Fixed 레이아웃 및 정밀 바이트 연산 (50 Cases)")
+    @DisplayName("[Batch 4] Fixed layout and precise byte operations (50 Cases)")
     class FixedBatch {
         @Test void test() throws Exception {
             Map<String, String> m = new LinkedHashMap<>();
-            m.put("body['id']", "#{'한글테스트'}");
+            m.put("body['id']", "#{'StringTest'}");
             m.put("body['amt']", "#{body['amt'] + 100}");
 
             Payload res = run(createFreshEvent(), m);
@@ -133,16 +133,16 @@ public class SpELModifierExtremeTestCase {
     @DisplayName("[Batch 5] Madness & Optimization (50 Cases)")
     class MadnessBatch {
         @Test void test() throws Exception {
-            // 🚀 Property만 수정 시 Write-Back(바이트 조립) 미발생 검증
-            // 🚀 [수정] event.properties -> payload.headers
+            // 🚀 Verify Write-Back (byte assembly) does not occur when modifying only Property
+            // 🚀 [Modified] event.properties -> payload.headers
             Map<String, String> m1 = Collections.singletonMap("payload.headers['only_prop']", "#{'change'}");
             Payload res1 = run(createFreshEvent(), m1);
             assertNotEquals(new String(FIXED_RAW), new String(res1.getBody()));
 
-            // 🚀 복합 연산 및 Java API
+            // 🚀 Complex operations and Java API
             Map<String, String> m2 = new LinkedHashMap<>();
             m2.put("body['uuid']", "#{T(java.util.UUID).randomUUID().toString()}");
-            // 🚀 [수정] event.properties -> payload.headers
+            // 🚀 [Modified] event.properties -> payload.headers
             m2.put("payload.headers['ts']", "#{T(java.lang.System).currentTimeMillis()}");
 
             Payload res2 = run(createFreshEvent(), m2);

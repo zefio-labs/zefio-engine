@@ -23,7 +23,7 @@ import java.util.concurrent.Executors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("XmlValueModifierDirectional 필터 테스트")
+@DisplayName("XmlValueModifierDirectional filter test")
 public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTestCase {
 
     public XmlValueModifierDirectionalTestCase() throws Exception {
@@ -41,13 +41,13 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     // =========================================================================
-    // 🛠️ [Helper 1] 필터 생성 보일러플레이트 제거
+    // 🛠️ [Helper 1] Remove filter creation boilerplate
     // =========================================================================
     private GatewayInterceptor buildFilterWithContext(Map<String, Object> context) {
         PluginContext ctx = PluginContext.builder()
                 .flowName("default")
                 .pluginName(getClass().getName())
-                .telegramName("xml-key-test") // 🚀 생성자 검증용 공통 주입
+                .telegramName("xml-key-test") // 🚀 Common injection for constructor validation
                 .sharedScheduledPool(sharedPool.getValue0())
                 .sharedIoPool(sharedPool.getValue1())
                 .context(context)
@@ -56,7 +56,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     // =========================================================================
-    // 🛠️ [Helper 2] 필터 재기동(Re-initialize) 헬퍼
+    // 🛠️ [Helper 2] Filter re-initialization helper
     // =========================================================================
     private void reInitializeFilter(String yamlKey) throws Exception {
         Map<String, Object> context = getContext(yamlKey);
@@ -67,22 +67,22 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     // =========================================================================
-    // 🛠️ [Helper 3] 이벤트 생성 보일러플레이트 제거
+    // 🛠️ [Helper 3] Remove event creation boilerplate
     // =========================================================================
     private Payload createXmlEvent(String xmlBody, String trxId) {
         byte[] bodyBytes = xmlBody != null ? xmlBody.getBytes(filterEncoding) : null;
         Payload payload = new ZefioMessage(bodyBytes, filterEncoding);
-        payload.setTelegramName("xml-key-test"); // 🚀 팩토리 조회용 공통 주입
+        payload.setTelegramName("xml-key-test"); // 🚀 Common injection for factory lookup
         payload.setTrxID(trxId);
         return payload;
     }
 
     // =========================================================================
-    // 🧪 테스트 케이스 시작 (반복 코드 완벽 제거)
+    // 🧪 Start of test cases (perfectly removed repetitive code)
     // =========================================================================
 
     @Test
-    @DisplayName("XML body에 key 데이터 삽입")
+    @DisplayName("Insert key data into XML body")
     public void testXmlInsert() throws Exception {
         String xml = "<user><name>XXX</name><age>30</age></user>";
         Payload payload = createXmlEvent(xml, "trx001");
@@ -90,7 +90,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
 
         filter.executeAsync(payload, Executors.newSingleThreadExecutor()).join();
 
-        // XML 비교
+        // Compare XML
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(true);
         Document expectedDoc = dbf.newDocumentBuilder()
@@ -107,7 +107,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     @Test
-    @DisplayName("누적 병합")
+    @DisplayName("Cumulative merge")
     public void testXmlMultipleChildren() throws Exception {
         reInitializeFilter("xml-insert-2");
 
@@ -135,7 +135,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     @Test
-    @DisplayName("XML 노드 추출 후 body에서 제거")
+    @DisplayName("Extract XML node and remove from body")
     public void testExtractAndRemoveFromBody() throws Exception {
         reInitializeFilter("xmlKeyExtractor1");
 
@@ -146,7 +146,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
 
         filter.executeAsync(requestPayload, Executors.newSingleThreadExecutor()).join();
 
-        // body XML 비교
+        // Compare body XML
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(true);
         Document expectedDoc = dbf.newDocumentBuilder()
@@ -157,7 +157,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
         assertEquals(expectedDoc.getDocumentElement().getElementsByTagName("body").item(0).getTextContent(),
                 actualDoc.getDocumentElement().getElementsByTagName("body").item(0).getTextContent());
 
-        // property값 체크
+        // Check property value
         for (Pair<String, String> propertyPair : propertyPairs) {
             String extractedPropertyValue = (String) requestPayload.getHeader(propertyPair.getValue0());
             assertNotNull(extractedPropertyValue);
@@ -166,7 +166,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     @Test
-    @DisplayName("removeExtracted=false 옵션일 때 body가 변경되지 않는지 확인")
+    @DisplayName("Verify body is not changed when removeExtracted=false option is used")
     public void testExtractWithoutRemovingBody() throws Exception {
         reInitializeFilter("xmlKeyExtractor2");
 
@@ -177,7 +177,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
 
         assertEquals("ABC", requestPayload.getHeader("header"));
 
-        // XML 구조 비교
+        // Compare XML structure
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(true);
         Document expectedDoc = dbf.newDocumentBuilder()
@@ -195,7 +195,7 @@ public class XmlValueModifierDirectionalTestCase extends AbstractNormalFilterTes
     }
 
     @Test
-    @DisplayName("XML 값 치환")
+    @DisplayName("XML value replacement")
     public void testXmlReplace() throws Exception {
         reInitializeFilter("xmlModifier1");
 

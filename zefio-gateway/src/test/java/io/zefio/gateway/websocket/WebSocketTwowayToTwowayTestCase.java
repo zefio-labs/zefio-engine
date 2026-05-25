@@ -11,7 +11,7 @@ import io.zefio.testsupport.payload.IPayloadBuilderFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("WebSocket 2way 테스트")
+@DisplayName("WebSocket 2-way test")
 public class WebSocketTwowayToTwowayTestCase extends UpstreamToIngressIntegrationTestCase {
 
     public WebSocketTwowayToTwowayTestCase() throws Exception {
@@ -49,8 +49,8 @@ public class WebSocketTwowayToTwowayTestCase extends UpstreamToIngressIntegratio
     }
 
     @Test
-    @DisplayName("WebSocket 송수신 테스트")
+    @DisplayName("WebSocket transmission/reception test")
     void testWebSocketSendReceive() throws Exception {
-        send(); // 요청 → 응답 확인
+        send(); // Request → Verify response
     }
 }

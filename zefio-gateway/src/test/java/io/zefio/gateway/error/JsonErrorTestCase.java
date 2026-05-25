@@ -18,11 +18,11 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-@DisplayName("JsonError 필터 테스트")
+@DisplayName("JsonError filter test")
 public class JsonErrorTestCase extends AbstractNormalFilterTestCase {
 
     public JsonErrorTestCase() throws Exception {
-        super("json-test.yaml", "json1"); // resources/error/json1.yml 설정 사용
+        super("error-test.yaml", "json1"); // Uses resources/error/json1.yml configuration
     }
 
     @Override
@@ -36,13 +36,13 @@ public class JsonErrorTestCase extends AbstractNormalFilterTestCase {
     }
 
     // =========================================================================
-    // 🛠️ [Helper 1] 필터 생성 보일러플레이트 제거
+    // 🛠️ [Helper 1] Remove filter creation boilerplate
     // =========================================================================
     private GatewayInterceptor buildFilterWithContext(Map<String, Object> context) {
         PluginContext ctx = PluginContext.builder()
                 .flowName("default")
                 .pluginName(getClass().getName())
-                .telegramName("json-default") // 🚀 생성자 검증용 공통 주입
+                .telegramName("json-default") // 🚀 Common injection for constructor validation
                 .sharedScheduledPool(sharedPool.getValue0())
                 .sharedIoPool(sharedPool.getValue1())
                 .context(context)
@@ -51,7 +51,7 @@ public class JsonErrorTestCase extends AbstractNormalFilterTestCase {
     }
 
     // =========================================================================
-    // 🛠️ [Helper 2] 필터 재기동(Re-initialize) 헬퍼
+    // 🛠️ [Helper 2] Filter re-initialization helper
     // =========================================================================
     private void reInitializeFilter(String yamlKey) throws Exception {
         Map<String, Object> context = getContext(yamlKey);
@@ -62,23 +62,23 @@ public class JsonErrorTestCase extends AbstractNormalFilterTestCase {
     }
 
     // =========================================================================
-    // 🛠️ [Helper 3] 이벤트 생성 보일러플레이트 제거
+    // 🛠️ [Helper 3] Remove event creation boilerplate
     // =========================================================================
     private Payload createJsonEvent(String jsonBody) {
         byte[] bodyBytes = jsonBody != null ? jsonBody.getBytes(filterEncoding) : null;
         Payload payload = new ZefioMessage(bodyBytes, filterEncoding);
-        payload.setTelegramName("json-default"); // 🚀 팩토리 조회용 공통 주입
+        payload.setTelegramName("json-default"); // 🚀 Common injection for factory lookup
         return payload;
     }
 
     // =========================================================================
-    // 🧪 테스트 케이스 시작 (반복 코드 완벽 제거)
+    // 🧪 Start of test cases (perfectly removed repetitive code)
     // =========================================================================
 
     @Test
-    @DisplayName("JSON 에러 필터 - FlowException 대체 테스트")
+    @DisplayName("JSON error filter - FlowException replacement test")
     void testJsonErrorWithErrorCodeReplacement() throws Exception {
-        // 🚀 헬퍼 적용으로 Event 생성 로직이 단 한 줄로 축소!
+        // 🚀 Event creation logic is reduced to a single line by applying the helper!
         Payload requestPayload = createJsonEvent("{\"code\":\"E123\",\"message\":\"original\"}");
         requestPayload.setThrowable(new FlowException(new IOException("IO Fail"), FlowResultStatus.CUSTOM_FILTER_ERROR, "E123", ""));
 
@@ -86,14 +86,14 @@ public class JsonErrorTestCase extends AbstractNormalFilterTestCase {
         String result = new String(responsePayload.getBody(), filterEncoding);
         System.out.println("Modified JSON: " + result);
 
-        // Then (결과 검증 수정)
-        // 1. errorCodeRules에 의해 "E123"이 "ABC"로 바뀌었는지 확인
+        // Then (Modify result verification)
+        // 1. Verify if "E123" is changed to "ABC" by errorCodeRules
         assert(result.contains("\"code\":\"ABC\""));
 
-        // 2. valueOverrides에 의해 "desc" 키가 추가되었는지 확인
+        // 2. Verify if "desc" key is added by valueOverrides
         assert(result.contains("\"desc\":\"json override\""));
 
-        // 3. 기존 필드가 유지되는지 확인
+        // 3. Verify if existing fields are maintained
         assert(result.contains("\"message\":\"original\""));
     }
 }

@@ -152,6 +152,4 @@
         </root>
     </springProfile>
 
-    <include optional="true" resource="site-logback.xml" />
-
 </configuration>
