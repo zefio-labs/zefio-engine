@@ -8,18 +8,16 @@ import io.zefio.core.PipelineService;
 import io.zefio.core.beans.FlowSyncBridge;
 import io.zefio.core.common.base.ScopeType;
 import io.zefio.core.common.exception.FlowException;
-import io.zefio.core.common.util.DeepMergeUtils;
+import io.zefio.core.config.flow.*;
+import io.zefio.core.config.global.GlobalOptionsProperties;
+import io.zefio.core.config.monitor.MonitorProperties;
 import io.zefio.core.engine.flow.FlowInitContext;
 import io.zefio.core.engine.flow.FlowService;
 import io.zefio.core.engine.policy.ExceptionPolicyManager;
 import io.zefio.core.engine.pool.SharedPools;
 import io.zefio.core.engine.processor.*;
 import io.zefio.core.engine.processor.dto.SwitchBranch;
-import io.zefio.core.payload.ExchangePattern;
 import io.zefio.core.payload.Payload;
-import io.zefio.core.config.flow.*;
-import io.zefio.core.config.global.GlobalOptionsProperties;
-import io.zefio.core.config.monitor.MonitorProperties;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,15 +25,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * A factory component responsible for assembling PipelineService instances.
- * It parses flow configurations, merges global profiles, constructs recursive
- * processing pipelines (including resilient scopes, scatter-gather routers,
- * and conditional selectors), and initializes ingress modules and error handling pipelines.
+ * Purely focused on pipeline generation. Profile mixing is completely deprecated.
  */
 @Component
 public class FlowServiceFactory {
@@ -54,14 +49,15 @@ public class FlowServiceFactory {
     @Autowired
     private FlowSyncBridge flowSyncBridge;
 
-    public PipelineService build(FlowConfiguration f, SharedPools sharedPools,
-                                 Map<String, Object> globalProfiles,
-                                 Map<String, StepConfiguration> globalErrors) {
+    /**
+     * Builds the executable pipeline service directly using the fully pre-flattened flow model.
+     */
+    public PipelineService build(FlowConfiguration f, SharedPools sharedPools) {
         try {
             String ingressTelegramKey = f.getIngress().getTelegram();
 
-            List<Processor> rootPipeline = buildPipeline(f.getSteps(), f, sharedPools, globalProfiles);
-            mergeProfile(f.getIngress(), globalProfiles);
+            // 💡 Profile merging parameters completely removed
+            List<Processor> rootPipeline = buildPipeline(f.getSteps(), f, sharedPools);
 
             PluginContext ingressCtx = buildContext(f, ingressTelegramKey, sharedPools)
                     .exchangePattern(f.getIngress().getExchangePattern()).build();
@@ -75,17 +71,8 @@ public class FlowServiceFactory {
                     String errorType = StringUtils.isNotBlank(errConf.getErrorType()) ? errConf.getErrorType() : "ANY";
                     List<Processor> pipeline = new ArrayList<>();
 
-                    if (StringUtils.isNotBlank(errConf.getRefErrorHandler()) && globalErrors.containsKey(errConf.getRefErrorHandler())) {
-                        String refKey = errConf.getRefErrorHandler();
-                        StepConfiguration globalStep = globalErrors.get(refKey);
-                        if (StringUtils.isBlank(globalStep.getName())) {
-                            globalStep.setName(refKey);
-                        }
-
-                        pipeline = buildPipeline(Collections.singletonList(globalStep), f, sharedPools, globalProfiles);
-                    }
-                    else if (errConf.getSteps() != null && !errConf.getSteps().isEmpty()) {
-                        pipeline = buildPipeline(errConf.getSteps(), f, sharedPools, globalProfiles);
+                    if (errConf.getSteps() != null && !errConf.getSteps().isEmpty()) {
+                        pipeline = buildPipeline(errConf.getSteps(), f, sharedPools);
                     }
 
                     if (!pipeline.isEmpty()) {
@@ -136,24 +123,20 @@ public class FlowServiceFactory {
                 .build();
     }
 
-    private List<Processor> buildPipeline(List<StepConfiguration> steps, FlowConfiguration f,
-                                          SharedPools sharedPools,
-                                          Map<String, Object> globalProfiles) {
+    private List<Processor> buildPipeline(List<StepConfiguration> steps, FlowConfiguration f, SharedPools sharedPools) {
         List<Processor> pipeline = new ArrayList<>();
 
         for (StepConfiguration stepConfig : steps) {
-            mergeProfile(stepConfig, globalProfiles);
-
             String stepTelegramKey = stepConfig.getTelegram();
             Processor processor;
             ScopeType scopeType = stepConfig.getScopeType();
 
             switch (scopeType) {
                 case TRY_SCOPE:
-                    List<Processor> tryChild = buildPipeline(stepConfig.getSteps(), f, sharedPools, globalProfiles);
+                    List<Processor> tryChild = buildPipeline(stepConfig.getSteps(), f, sharedPools);
                     List<Processor> fallback = new ArrayList<>();
                     if (stepConfig.getOnError() == OnErrorPolicy.FALLBACK && stepConfig.getFallbackSteps() != null && !stepConfig.getFallbackSteps().isEmpty()) {
-                        fallback = buildPipeline(stepConfig.getFallbackSteps(), f, sharedPools, globalProfiles);
+                        fallback = buildPipeline(stepConfig.getFallbackSteps(), f, sharedPools);
                     }
 
                     RetryPolicy<Payload> scopeRetryPolicy = buildNodeRetryPolicy(stepConfig.getRetry());
@@ -169,7 +152,7 @@ public class FlowServiceFactory {
                     break;
 
                 case SCATTER_GATHER:
-                    List<Processor> sgChildren = buildPipeline(stepConfig.getSteps(), f, sharedPools, globalProfiles);
+                    List<Processor> sgChildren = buildPipeline(stepConfig.getSteps(), f, sharedPools);
                     processor = new ParallelScatterGatherRouter(
                             stepConfig.getName(),
                             sgChildren,
@@ -182,12 +165,11 @@ public class FlowServiceFactory {
                     List<SwitchBranch> branches = new ArrayList<>();
                     if (stepConfig.getCases() != null) {
                         for (SwitchCaseConfig cc : stepConfig.getCases()) {
-                            branches.add(new SwitchBranch(cc.getCondition(),
-                                    buildPipeline(cc.getSteps(), f, sharedPools, globalProfiles)));
+                            branches.add(new SwitchBranch(cc.getCondition(), buildPipeline(cc.getSteps(), f, sharedPools)));
                         }
                     }
                     List<Processor> defBranch = (stepConfig.getDefaultSteps() != null) ?
-                            buildPipeline(stepConfig.getDefaultSteps(), f, sharedPools, globalProfiles) : null;
+                            buildPipeline(stepConfig.getDefaultSteps(), f, sharedPools) : null;
                     processor = new ConditionalRouteSelector(stepConfig.getName(), branches, defBranch);
                     break;
 
@@ -230,38 +212,5 @@ public class FlowServiceFactory {
                 .sharedIoPool(sharedPools.getSharedMdcIoExecutor())
                 .flowSyncBridge(flowSyncBridge)
                 .meterRegistry(meterRegistry);
-    }
-
-    private void mergeProfile(IngressConfiguration ingressConfig, Map<String, Object> globalProfiles) {
-        if (ingressConfig != null && StringUtils.isNotBlank(ingressConfig.getProfile())
-                && globalProfiles != null && globalProfiles.containsKey(ingressConfig.getProfile())) {
-            Map<String, Object> profileData = (Map<String, Object>) globalProfiles.get(ingressConfig.getProfile());
-
-            if (profileData.containsKey("config") && profileData.get("config") instanceof Map) {
-                Map<String, Object> profileConfig = (Map<String, Object>) profileData.get("config");
-                Map<String, Object> mergedConfig = DeepMergeUtils.mergeClone(profileConfig, ingressConfig.getConfig());
-                ingressConfig.setConfig(mergedConfig);
-            }
-
-            if (profileData.containsKey("exchangePattern") && ingressConfig.getExchangePattern() == null) {
-                ingressConfig.setExchangePattern(ExchangePattern.valueOf(profileData.get("exchangePattern").toString()));
-            }
-        }
-    }
-
-    private void mergeProfile(StepConfiguration stepConfig, Map<String, Object> globalProfiles) {
-        if (StringUtils.isNotBlank(stepConfig.getProfile()) && globalProfiles != null && globalProfiles.containsKey(stepConfig.getProfile())) {
-            Map<String, Object> profileData = (Map<String, Object>) globalProfiles.get(stepConfig.getProfile());
-
-            if (profileData.containsKey("config") && profileData.get("config") instanceof Map) {
-                Map<String, Object> profileConfig = (Map<String, Object>) profileData.get("config");
-                Map<String, Object> mergedConfig = DeepMergeUtils.mergeClone(profileConfig, stepConfig.getConfig());
-                stepConfig.setConfig(mergedConfig);
-            }
-
-            if (profileData.containsKey("exchangePattern") && stepConfig.getExchangePattern() == null) {
-                stepConfig.setExchangePattern(ExchangePattern.valueOf(profileData.get("exchangePattern").toString()));
-            }
-        }
     }
 }

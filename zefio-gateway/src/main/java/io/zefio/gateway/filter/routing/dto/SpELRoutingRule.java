@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.zefio.core.annotation.AIOpsTuning;
 import io.zefio.core.payload.ExchangePattern;
 import lombok.Data;
+import java.util.Map;
 
 /**
  * Configuration model for an individual SpEL routing rule.
  * Allows for dynamic branching based on payload content, infrastructure properties, or complex logic.
+ * Upgraded to capture flattened endpoint metadata from the Control Plane seamlessly.
  */
 @Data
 @Schema(description = "Configuration for SpEL-based intelligent routing rules.")
@@ -26,13 +28,6 @@ public class SpELRoutingRule {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private String condition;
 
-    @AIOpsTuning(hotDeployable = false, riskLevel = AIOpsTuning.RiskLevel.CRITICAL, category = AIOpsTuning.Category.BUSINESS_LOGIC)
-    @Schema(description = "The ID of the target module to call if the condition is met. " +
-            "It is highly recommended to reference module names declared in endpoints.yaml.",
-            example = "upstream-bank-a",
-            requiredMode = Schema.RequiredMode.REQUIRED)
-    private String refModuleName;
-
     @AIOpsTuning(hotDeployable = false, riskLevel = AIOpsTuning.RiskLevel.CRITICAL, category = AIOpsTuning.Category.PROTOCOL_SPEC)
     @Schema(description = "Overrides the communication pattern for the target module.\n" +
             "* **twoway**: Wait for a response (Default)\n" +
@@ -40,4 +35,17 @@ public class SpELRoutingRule {
             nullable = true,
             example = "twoway")
     private ExchangePattern exchangePattern;
+
+    // ========================================================================
+    // 💡 Extended Core Structural Properties for CP Flattening Compatibility
+    // ========================================================================
+
+    @Schema(description = "The resolved component plugin execution identifier type from CP.", example = "HttpUpstream")
+    private String type;
+
+    @Schema(description = "The mapped unique data serialization profile telegram key handle.", example = "json-standard")
+    private String telegram;
+
+    @Schema(description = "Dynamic inline Key-Value configuration parameters for JIT Netty channel instantiation.")
+    private Map<String, Object> config;
 }

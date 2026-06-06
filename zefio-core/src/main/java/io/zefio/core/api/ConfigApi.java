@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.beans.DynamicSchemaLoader;
 import io.zefio.core.common.base.PluginMeta;
-import io.zefio.core.common.base.PluginType;
 import io.zefio.core.config.flow.FlowSettings;
 import io.zefio.core.schema.PluginSchemaExtractor;
 import io.zefio.core.telemetry.cp.ZefioCpRedisPublisher;
@@ -71,39 +70,26 @@ public class ConfigApi {
         }
     }
 
-    @GetMapping(value = "")
-    public Object getConfig(@RequestParam(name = "moduleName", required = false) String moduleName,
-                            @RequestParam(name = "type", required = false) PluginType type) {
-        if (moduleName == null && type == null) {
-            return yamlFilterLoader.getAllFilters().values();
-        } else if (moduleName == null && type != null) {
-            return yamlFilterLoader.getByType(type);
-        } else {
-            return yamlFilterLoader.get(moduleName);
-        }
-    }
+    @GetMapping(value = "/registry", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<Map<String, Object>> getRegistry() {
+        List<Map<String, Object>> plugins = new ArrayList<>();
 
-    @GetMapping(value = "/dto/{parameter}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getDTO(@PathVariable("parameter") String parameter) {
-        try {
-            String targetClassName = null;
-            PluginMeta filter = yamlFilterLoader.get(parameter);
+        for (PluginMeta meta : yamlFilterLoader.getAllFilters().values()) {
+            Map<String, Object> plugin = new HashMap<>();
+            plugin.put("name", meta.getName());
+            plugin.put("type", meta.getType());
+            plugin.put("className", meta.getClassName());
 
-            if (filter != null && filter.getDtoClassName() != null) {
-                targetClassName = filter.getDtoClassName();
-            } else {
-                // Fallback: If no custom configuration mapping exists, assume parameter represents an absolute class path
-                targetClassName = parameter;
+            if (meta.getDtoClassName() != null) {
+                try {
+                    Class<?> dtoClass = Class.forName(meta.getDtoClassName());
+                    plugin.put("schema", schemaExtractor.extractSchemaDescriptions(dtoClass, new HashSet<>()));
+                } catch (Exception e) {
+                    log.warn("[ConfigApi] Schema extraction skipped for: {}", meta.getName());
+                }
             }
-
-            Class<?> dtoClass = Class.forName(targetClassName);
-            Map<String, Object> structuralSchema = schemaExtractor.extractSchemaDescriptions(dtoClass, new HashSet<>());
-            return ResponseEntity.ok(structuralSchema);
-
-        } catch (ClassNotFoundException e) {
-            log.error("[ConfigApi] Target class mapping resolution failed for query parameter token: {}", parameter);
-            return ResponseEntity.badRequest().body(Collections.singletonMap("error",
-                    "Target metadata DTO reflection model path could not be resolved: " + e.getMessage()));
+            plugins.add(plugin);
         }
+        return plugins;
     }
 }

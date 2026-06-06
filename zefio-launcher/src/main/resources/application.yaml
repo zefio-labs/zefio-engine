@@ -41,20 +41,15 @@ spring:
     banner-mode: log
   config:
     import:
-      - classpath:globals/endpoints.yaml
+      - classpath:globals/global-options.yaml
       - classpath:globals/monitor.yaml
       - classpath:globals/system.yaml
-      - classpath:globals/global-options.yaml
-      - classpath:globals/errors.yaml
 
 # Explicit Zefio Domain Imports
 imports:
-  - "classpath:globals/endpoints.yaml"
+  - "classpath:globals/global-options.yaml"
   - "classpath:globals/monitor.yaml"
   - "classpath:globals/system.yaml"
-  - "classpath:globals/global-options.yaml"
-  - "classpath:globals/errors.yaml"
-  - "classpath:globals/profiles.yaml"
   - "classpath:globals/telegrams.yaml"
 
 # Commented flows (Activated manually or via environment-specific profiles)
@@ -67,3 +62,4 @@ imports:
 #  - "classpath:flows/flow-tryscope-conditional.yaml"
 #  - "classpath:flows/flow-tryscope-retry.yaml"
 #  - "classpath:flows/flow-vm-modify.yaml"
+  - "classpath:flows/flow-hotswap.yaml"

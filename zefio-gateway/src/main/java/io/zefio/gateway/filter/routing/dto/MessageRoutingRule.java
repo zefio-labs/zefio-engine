@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.zefio.core.annotation.AIOpsTuning;
 import io.zefio.core.payload.ExchangePattern;
 import lombok.Data;
+import java.util.Map;
 
 /**
  * Configuration model for an individual routing rule.
  * Supports offset-based extraction for Fixed formats and path-based extraction for JSON/XML.
+ * Expanded to consume inline value-objects produced by the Control Plane's composite pass.
  */
 @Data
 @Schema(description = "Configuration for unified routing rules.")
@@ -36,11 +38,20 @@ public class MessageRoutingRule {
     @Schema(description = "The value used for comparison against the extracted data.", example = "EM")
     private String matchValue;
 
-    @AIOpsTuning(hotDeployable = false, riskLevel = AIOpsTuning.RiskLevel.CRITICAL, category = AIOpsTuning.Category.BUSINESS_LOGIC)
-    @Schema(description = "The name of the target module to execute upon a match.", example = "logging")
-    private String refModuleName;
-
     @AIOpsTuning(hotDeployable = false, riskLevel = AIOpsTuning.RiskLevel.CRITICAL, category = AIOpsTuning.Category.PROTOCOL_SPEC)
     @Schema(description = "The exchange pattern for the target module (oneway or twoway).", nullable = true, example = "oneway")
     private ExchangePattern exchangePattern;
+
+    // ========================================================================
+    // 💡 Extended Core Structural Properties for CP Flattening Compatibility
+    // ========================================================================
+
+    @Schema(description = "The resolved component plugin execution identifier type from CP.", example = "HttpUpstream")
+    private String type;
+
+    @Schema(description = "The mapped unique data serialization profile telegram key handle.", example = "xml-tcp-delimiter")
+    private String telegram;
+
+    @Schema(description = "Dynamic inline Key-Value configuration parameters for JIT Netty channel instantiation.")
+    private Map<String, Object> config;
 }

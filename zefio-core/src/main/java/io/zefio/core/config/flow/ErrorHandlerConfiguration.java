@@ -2,13 +2,13 @@ package io.zefio.core.config.flow;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
-
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Defines conditional error handling logic based on the exception type.
- * When a matching error occurs, the engine executes the sequence of steps defined here.
+ * Since the Control Plane (CP) performs full flattening, this configuration
+ * directly contains the executable steps for error recovery without string references.
  */
 @Data
 public class ErrorHandlerConfiguration {
@@ -19,10 +19,7 @@ public class ErrorHandlerConfiguration {
 
     /**
      * The sequence of steps to execute during error recovery.
-     * Can include tasks like building error payloads or calling fallback Upstreams.
+     * CP has already resolved all global error templates into this explicit list.
      */
     private List<StepConfiguration> steps = new ArrayList<>();
-
-    /** Reference key for a globally defined error handler in FlowSettings. */
-    private String refErrorHandler;
 }

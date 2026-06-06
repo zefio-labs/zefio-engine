@@ -11,9 +11,13 @@ flows:
       name: from-client-retry-51005
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
         keepAlive: false
         port: 51005
         requestEncoding: utf-8

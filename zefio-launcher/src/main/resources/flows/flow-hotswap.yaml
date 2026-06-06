@@ -1,3 +1,6 @@
+# ==============================================================================
+# Filename: flows/flow-hotswap.yaml.yaml
+# ==============================================================================
 flows:
   - name: inbound
     label: "9_HTTP_TO_HTTP_Massive"
@@ -17,19 +20,25 @@ flows:
       ioQueue:
         capacity: 20000
 
-    # 🎯 Ingress: Synchronous (Sync)
     ingress:
       name: from
       label: "HTTP Inbound (51009)"
       type: HttpIngress
       telegram: fixed-standard
-      profile: ingress-sync
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
+        readTimeout: 10000
+        transactionTimeoutMillis: 15000
+        responseMatchingType: session
+        keepAlive: false
         port: 51009
         requestEncoding: utf-8
         responseEncoding: utf-8
-        # 🚀 [Business-Specific] Inbound response Content-Type
         responseContentType: text/plain
 
     # 🎯 Upstream: Synchronous (Sync) HTTP 1,000 Pool
@@ -38,14 +47,25 @@ flows:
         label: "Target Request (HTTP_Massive)"
         type: HttpUpstream
         telegram: fixed-standard
-        profile: upstream-sync-massive
         exchangePattern: RequestReply
         retry:
           enabled: false
         config:
-          host: 192.168.3.218
+          workThreadCount: 8
+          connectTimeout: 3000
+          soKeepAlive: false
+          tcpNoDelay: true
+          soReUseAddr: true
+          readTimeout: 5000
+          transactionTimeoutMillis: 10000
+          responseMatchingType: session
+          keepAlive: false
+          poolMaxSize: 0
+          onceMaxRetries: 3
+          onceTryTimeoutMillis: 2000
+          onceBackoffDelayMillis: 500
+          host: localhost
           port: 51109
-          # 🚀 [Business Routing] HTTP outbound specific settings
           requestContentType: text/plain
           requestHttpMethod: POST
           requestPath: service/
@@ -53,4 +73,11 @@ flows:
           responseEncoding: utf-8
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null

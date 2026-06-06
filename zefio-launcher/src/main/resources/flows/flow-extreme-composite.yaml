@@ -186,7 +186,14 @@ flows:
     # ──────────────────────────────────────────────────────────────────────────
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null
 
 
   # ==============================================================================
@@ -208,7 +215,30 @@ flows:
             # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
             - name: "Direct to XML Endpoint"
               condition: "#{true}"
-              refModuleName: "to-xml"
+              type: HttpUpstream
+              telegram: xml-tcp-delimiter
+              exchangePattern: RequestReply
+              retry:
+                enabled: false
+              config:
+                workThreadCount: 8
+                connectTimeout: 3000
+                soKeepAlive: false
+                tcpNoDelay: true
+                soReUseAddr: true
+                readTimeout: 5000
+                transactionTimeoutMillis: 10000
+                responseMatchingType: session
+                keepAlive: false
+                poolMaxSize: 0
+                onceMaxRetries: 3
+                onceTryTimeoutMillis: 2000
+                onceBackoffDelayMillis: 500
+                host: localhost
+                port: 51101
+                requestContentType: application/xml
+                requestEncoding: utf-8
+                responseEncoding: utf-8
 
   # ==============================================================================
   # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
@@ -229,4 +259,27 @@ flows:
             # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
             - name: "Direct to JSON Endpoint"
               condition: "#{true}"
-              refModuleName: "to-json"
+              type: HttpUpstream
+              telegram: json-standard
+              exchangePattern: RequestReply
+              retry:
+                enabled: false
+              config:
+                workThreadCount: 8
+                connectTimeout: 3000
+                soKeepAlive: false
+                tcpNoDelay: true
+                soReUseAddr: true
+                readTimeout: 5000
+                transactionTimeoutMillis: 10000
+                responseMatchingType: session
+                keepAlive: false
+                poolMaxSize: 0
+                onceMaxRetries: 3
+                onceTryTimeoutMillis: 2000
+                onceBackoffDelayMillis: 500
+                host: localhost
+                port: 51101
+                requestContentType: application/json
+                requestEncoding: utf-8
+                responseEncoding: utf-8

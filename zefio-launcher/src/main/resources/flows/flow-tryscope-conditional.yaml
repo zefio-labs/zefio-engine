@@ -16,9 +16,13 @@ flows:
       name: from-client-conditional-51007
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
         keepAlive: false
         port: 51007
         requestEncoding: utf-8
@@ -94,4 +98,11 @@ flows:
     # Global Error Handler (Safety Net)
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null

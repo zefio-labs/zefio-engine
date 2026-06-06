@@ -11,9 +11,13 @@ flows:
       name: client-in-51008
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
         keepAlive: false
         port: 51008
         requestEncoding: utf-8
@@ -40,9 +44,21 @@ flows:
           - name: call-internal-target
             type: HttpUpstream
             telegram: fixed-http-req
-            profile: upstream-sync-transient-alt
             exchangePattern: RequestReply
             config:
+              workThreadCount: 8
+              connectTimeout: 3000
+              soKeepAlive: false
+              tcpNoDelay: true
+              soReUseAddr: true
+              readTimeout: 5000
+              transactionTimeoutMillis: 10000
+              responseMatchingType: session
+              keepAlive: false
+              poolMaxSize: 0
+              onceMaxRetries: 3
+              onceTryTimeoutMillis: 2000
+              onceBackoffDelayMillis: 500
               host: "localhost"
               port: 52008 # 🎯 Targets Flow B in the same process
               requestHttpMethod: POST
@@ -84,9 +100,17 @@ flows:
       name: loopback-receiver-52008
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
+        readTimeout: 10000
+        transactionTimeoutMillis: 15000
+        responseMatchingType: session
+        keepAlive: false
         port: 52008
         responseContentType: application/json
 
@@ -113,4 +137,11 @@ flows:
     # 💥 Global Error Handler (Receiver side)
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null

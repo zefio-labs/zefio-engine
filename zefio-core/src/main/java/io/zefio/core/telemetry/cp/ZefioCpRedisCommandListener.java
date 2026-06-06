@@ -1,11 +1,13 @@
 package io.zefio.core.telemetry.cp;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.beans.FlowSettingsBean;
 import io.zefio.core.config.ZefioProperties;
 import io.zefio.core.config.flow.FlowSettings;
+import io.zefio.core.config.flow.TelegramsConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
@@ -32,8 +34,11 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
     private final JedisPool jedisPool;
     private final FlowSettingsBean flowSettingsBean; // The engine orchestrator for hot-swapping
 
-    private final ObjectMapper jsonMapper = new ObjectMapper();
-    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+    // 💡 Defensively enabled FAIL_ON_UNKNOWN_PROPERTIES to avoid crashing during minor grammar mutations
+    private final ObjectMapper jsonMapper = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     private Thread subscriberThread;
     private JedisPubSub pubSub;
@@ -60,6 +65,7 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
         subscriberThread.start();
     }
 
+    @SuppressWarnings("unchecked")
     private void handleCommand(String jsonMessage) {
         try {
             // 1. Parse the incoming JSON command
@@ -76,7 +82,10 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
             // 3. Process hot-reload action
             if ("hot-reload".equals(command.get("action"))) {
                 Map<String, Object> payload = (Map<String, Object>) command.get("payload");
-                String yamlStr = (String) payload.get("yaml");
+
+                // 💡 Extract decoupled distinct properties sent independently from the CP
+                String flowsYaml = (String) payload.get("flowsYaml");
+                Map<String, Object> rawTelegrams = (Map<String, Object>) payload.get("telegrams");
 
                 // Extract deployId to correlate the response. Default to "unknown" if not provided by CP.
                 String deployId = (String) command.getOrDefault("deployId", "unknown");
@@ -84,10 +93,19 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
                 log.info("🔥 [CP-Agent] Hot-Reloading Pipeline on Node: {}", zefioProperties.getNode().getId());
 
                 try {
-                    // 4. Convert YAML string to FlowSettings object and trigger hotSwap
-                    FlowSettings newSettings = yamlMapper.readValue(yamlStr, FlowSettings.class);
+                    // 4. Convert clean pure flows YAML string directly to FlowSettings object
+                    FlowSettings newSettings = yamlMapper.readValue(flowsYaml, FlowSettings.class);
 
-                    // If this fails, it will immediately throw an exception and jump to the catch block
+                    // 💡 Map and inject the natively decoupled JSON telegrams matrix directly into the active configuration spec
+                    if (rawTelegrams != null && !rawTelegrams.isEmpty()) {
+                        Map<String, TelegramsConfiguration> typedTelegrams = jsonMapper.convertValue(
+                                rawTelegrams,
+                                new TypeReference<Map<String, TelegramsConfiguration>>() {}
+                        );
+                        newSettings.setTelegrams(typedTelegrams);
+                    }
+
+                    // Trigger hotSwap sequence within the engine bean layer
                     flowSettingsBean.hotSwap(newSettings);
 
                     log.info("✅ [CP-Agent] Pipeline hot-swap completed.");

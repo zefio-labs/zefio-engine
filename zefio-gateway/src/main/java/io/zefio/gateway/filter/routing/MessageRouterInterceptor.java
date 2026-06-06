@@ -9,13 +9,11 @@ import io.zefio.core.common.base.PluginType;
 import io.zefio.core.common.exception.FlowException;
 import io.zefio.core.common.exception.FlowResultStatus;
 import io.zefio.core.payload.Payload;
-import io.zefio.core.config.flow.StepConfiguration;
 import io.zefio.core.BaseGatewayPlugin;
 import io.zefio.core.GatewayInterceptor;
 import io.zefio.core.beans.ApplicationContextProvider;
 import io.zefio.core.beans.DynamicSchemaLoader;
 import io.zefio.core.factory.PluginContext;
-import io.zefio.core.util.FlowConfigUtils;
 import io.zefio.core.util.MDCUtils;
 import io.zefio.core.payload.PayloadBuilder;
 import io.zefio.core.payload.builder.config.FixedValues;
@@ -37,23 +35,22 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathFactory;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.Charset;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
  * Unified Content-Based Router (CBR) capable of multi-depth data extraction.
  * Supports Fixed-length, JSON (JsonPath), and XML (XPath) formats to determine
- * the downstream execution path.
+ * the downstream execution path. Optimized with an index-aligned array structure.
  */
 public class MessageRouterInterceptor extends BaseGatewayPlugin implements GatewayInterceptor {
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final ObjectMapper xmlMapper = new XmlMapper();
     private final MessageRouterInterceptorValues values;
 
-    /** Map to cache initialized target module instances for performance. */
-    private final Map<String, GatewayInterceptor> toolModuleMap = new HashMap<>();
+    /** 💡 Array aligned 1:1 with routingRules index positions for direct O(1) array access. */
+    private GatewayInterceptor[] targetFilters;
 
     public MessageRouterInterceptor(PluginContext context) {
         super(context, new ModuleMetricsAggregator(PluginType.interceptor, context.getFlowName() + "-" + context.getPluginName()));
@@ -66,33 +63,36 @@ public class MessageRouterInterceptor extends BaseGatewayPlugin implements Gatew
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void initialise() throws Exception {
         super.initialise();
 
-        if (values.getRoutingRules() == null) return;
+        List<MessageRoutingRule> rules = values.getRoutingRules();
+        if (rules == null || rules.isEmpty()) return;
 
         DynamicSchemaLoader loader = ApplicationContextProvider.getApplicationContext().getBean(DynamicSchemaLoader.class);
 
-        for (MessageRoutingRule rule : values.getRoutingRules()) {
-            String refModuleName = rule.getRefModuleName();
+        // Allocate array tracking slots matching the exact rule set boundaries
+        this.targetFilters = new GatewayInterceptor[rules.size()];
 
-            // Prevent redundant initialization if multiple rules reference the same filter
-            if (toolModuleMap.containsKey(refModuleName)) continue;
+        for (int i = 0; i < rules.size(); i++) {
+            MessageRoutingRule rule = rules.get(i);
 
-            StepConfiguration stepConfig = FlowConfigUtils.getStepConfigByName(refModuleName);
-
-            if (stepConfig == null) {
-                log.warn("[{}] Routing Target '{}' not found in configuration.", pluginName, refModuleName);
+            if (StringUtils.isBlank(rule.getType())) {
+                log.warn("[{}] Indexed CBR routing rule slot [{}] lacks a valid inner component type.", pluginName, i);
                 continue;
             }
+
+            // Create a trace handle context localized by its position index
+            String internalPluginName = flowName + "-" + pluginName + "-cbr-target-" + i;
 
             PluginContext.PluginContextBuilder contextBuilder = PluginContext.builder()
                     .flowName(flowName)
                     .flowLabel(flowLabel)
-                    .pluginName(stepConfig.getName())
-                    .pluginLabel(stepConfig.getLabel())
-                    .telegramName(stepConfig.getTelegram())
-                    .context(stepConfig.getConfig())
+                    .pluginName(internalPluginName)
+                    .pluginLabel(rule.getName())
+                    .telegramName(rule.getTelegram())
+                    .context(rule.getConfig()) // Directly wire the embedded config map payload
                     .sharedScheduledPool(context.getSharedScheduledPool())
                     .sharedIoPool(context.getSharedIoPool())
                     .flowSyncBridge(syncBridge)
@@ -102,11 +102,12 @@ public class MessageRouterInterceptor extends BaseGatewayPlugin implements Gatew
                     contextBuilder.build() :
                     contextBuilder.exchangePattern(rule.getExchangePattern()).build();
 
-            @SuppressWarnings("unchecked")
-            Class<GatewayInterceptor> filterClazz = (Class<GatewayInterceptor>) Class.forName(loader.get(stepConfig.getType()).getClassName());
+            Class<GatewayInterceptor> filterClazz = (Class<GatewayInterceptor>) Class.forName(loader.get(rule.getType()).getClassName());
             GatewayInterceptor filter = filterClazz.getConstructor(PluginContext.class).newInstance(ctx);
             filter.initialise();
-            toolModuleMap.put(refModuleName, filter);
+
+            // Bind the active execution engine directly into the matching index slot position
+            this.targetFilters[i] = filter;
         }
     }
 
@@ -136,9 +137,11 @@ public class MessageRouterInterceptor extends BaseGatewayPlugin implements Gatew
             Object telegramValues = currentBuilder.getTelegram().getValues();
 
             GatewayInterceptor selectedFilter = null;
+            List<MessageRoutingRule> rules = values.getRoutingRules();
 
             // Evaluate rules sequentially (First-Hit-Win)
-            for (MessageRoutingRule rule : values.getRoutingRules()) {
+            for (int i = 0; i < rules.size(); i++) {
+                MessageRoutingRule rule = rules.get(i);
                 String extractedValue = null;
 
                 // 1. Fixed Format: Offset-based extraction
@@ -183,9 +186,10 @@ public class MessageRouterInterceptor extends BaseGatewayPlugin implements Gatew
                 }
 
                 if (extractedValue != null && extractedValue.equals(rule.getMatchValue())) {
-                    selectedFilter = toolModuleMap.get(rule.getRefModuleName());
+                    // 💡 Direct array slot retrieval by index pointer position - Pure O(1) performance
+                    selectedFilter = this.targetFilters[i];
                     if (selectedFilter != null) {
-                        log.info("Routing matched: [{}] (Value: {}, Target Filter: {})", rule.getName(), extractedValue, selectedFilter.getPluginName());
+                        log.info("Routing matched slot [{}]: [{}] (Value: {}, Target Filter: {})", i, rule.getName(), extractedValue, selectedFilter.getPluginName());
                         break;
                     }
                 }
@@ -201,16 +205,13 @@ public class MessageRouterInterceptor extends BaseGatewayPlugin implements Gatew
             }
 
             // Delegation of Control: Pass the execution and the current flowExecutor to the target filter.
-            // If the target filter performs I/O, it will manage the transition to the Shared-IO pool.
             return selectedFilter.executeAsync(payload, flowExecutor)
                     .whenComplete((result, ex) -> {
-                        // Aggregate routing metrics after target execution completes
                         handleMetrics(result, ex, start);
                     });
 
         } catch (Exception e) {
             log.error("Routing process failed: {}", e.getMessage());
-            // Map formatting and mapping errors to BAD_REQUEST to prevent unnecessary infrastructure alerts
             FlowException ex = new FlowException(e, FlowResultStatus.BAD_REQUEST);
             handleMetrics(payload, ex, start);
 

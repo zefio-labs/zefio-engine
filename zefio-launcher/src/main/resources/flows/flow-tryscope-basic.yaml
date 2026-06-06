@@ -16,9 +16,13 @@ flows:
       label: "HTTP Client Inbound"
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
         keepAlive: false
         port: 51004
         requestEncoding: utf-8
@@ -76,4 +80,11 @@ flows:
     # 💥 Global Error Handler (Protects exceptions occurring outside TryScope)
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null

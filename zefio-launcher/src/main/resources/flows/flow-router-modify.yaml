@@ -26,9 +26,13 @@ flows:
       label: "HTTP Source Inbound (51001)"
       type: HttpIngress
       telegram: fixed-http-req
-      profile: ingress-sync-alt
       exchangePattern: RequestReply
       config:
+        workThreadCount: 16
+        connectTimeout: 5000
+        soKeepAlive: true
+        tcpNoDelay: true
+        soReUseAddr: true
         keepAlive: false
         port: 51001
         requestEncoding: utf-8
@@ -115,11 +119,57 @@ flows:
                 # Shoot to XML target if original TRX_ID starts with TRX-9999
                 - name: "Route to XML"
                   condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-9999')}"
-                  refModuleName: "to-xml"
+                  type: HttpUpstream
+                  telegram: xml-tcp-delimiter
+                  exchangePattern: RequestReply
+                  retry:
+                    enabled: false
+                  config:
+                    workThreadCount: 8
+                    connectTimeout: 3000
+                    soKeepAlive: false
+                    tcpNoDelay: true
+                    soReUseAddr: true
+                    readTimeout: 5000
+                    transactionTimeoutMillis: 10000
+                    responseMatchingType: session
+                    keepAlive: false
+                    poolMaxSize: 0
+                    onceMaxRetries: 3
+                    onceTryTimeoutMillis: 2000
+                    onceBackoffDelayMillis: 500
+                    host: localhost
+                    port: 51101
+                    requestContentType: application/xml
+                    requestEncoding: utf-8
+                    responseEncoding: utf-8
                 # Shoot to JSON target if original TRX_ID starts with TRX-JSON
                 - name: "Route to JSON"
                   condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-JSON')}"
-                  refModuleName: "to-json"
+                  type: HttpUpstream
+                  telegram: json-standard
+                  exchangePattern: RequestReply
+                  retry:
+                    enabled: false
+                  config:
+                    workThreadCount: 8
+                    connectTimeout: 3000
+                    soKeepAlive: false
+                    tcpNoDelay: true
+                    soReUseAddr: true
+                    readTimeout: 5000
+                    transactionTimeoutMillis: 10000
+                    responseMatchingType: session
+                    keepAlive: false
+                    poolMaxSize: 0
+                    onceMaxRetries: 3
+                    onceTryTimeoutMillis: 2000
+                    onceBackoffDelayMillis: 500
+                    host: localhost
+                    port: 51101
+                    requestContentType: application/json
+                    requestEncoding: utf-8
+                    responseEncoding: utf-8
 
         # 🚑 [Bypass Path] Operates on routing failure or target server timeout
         fallback-steps:
@@ -138,4 +188,11 @@ flows:
 
     on-error:
       - error-type: ANY
-        refErrorHandler: fixederror
+        steps:
+          - name: central-fixed-error
+            type: FixedFaultHandler
+            label: "Common Error Handling"
+            config:
+              errorCodeRules: [ ]
+              valueOverrides: [ ]
+              messageRule: null
