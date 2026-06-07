@@ -1,8 +1,8 @@
 package io.zefio.core.engine.policy;
 
 import io.zefio.core.common.exception.FlowResultStatus;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.config.global.ExceptionPolicyProperties;
-import io.zefio.core.config.global.GlobalOptionsProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -15,13 +15,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ExceptionPolicyManager {
 
-    private final GlobalOptionsProperties globalOptionsProperties;
+    // Target the root unified property bean to follow the single entry point design
+    private final ZefioEngineProperties zefioEngineProperties;
 
     /**
      * Determines whether the given status code is eligible for a 'retry'.
      */
     public boolean isRetryable(FlowResultStatus status) {
-        ExceptionPolicyProperties properties = globalOptionsProperties.getExceptionPolicy();
+        // Safe navigation via unified root settings graph
+        ExceptionPolicyProperties properties = zefioEngineProperties.getGlobalOptions().getExceptionPolicy();
 
         // 1. Check YAML configuration for overrides
         if (properties.getOverrides() != null && properties.getOverrides().containsKey(status.name())) {
@@ -38,7 +40,8 @@ public class ExceptionPolicyManager {
      * Determines whether a 'reply' should be sent to the client for the given status code.
      */
     public boolean shouldReply(FlowResultStatus status) {
-        ExceptionPolicyProperties properties = globalOptionsProperties.getExceptionPolicy();
+        // Safe navigation via unified root settings graph
+        ExceptionPolicyProperties properties = zefioEngineProperties.getGlobalOptions().getExceptionPolicy();
 
         // 1. Check YAML configuration for overrides
         if (properties.getOverrides() != null && properties.getOverrides().containsKey(status.name())) {

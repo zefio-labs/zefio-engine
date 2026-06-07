@@ -2,284 +2,285 @@
 # Filename: flows/flow-extreme-composite.yaml
 # Description: Fully integrated flow combining Try + SG + Switch + Double Fallback
 # ==============================================================================
-flows:
-  - name: extreme-orchestration-flow
-    label: "Core Engine 3 Pillars (Try, SG, Switch) Fully Integrated Flow"
-    options:
-      threadPool:
-        # 🚀 [Deterministic Prescription] Increased core size significantly to handle instantaneous bursts of 600+ threads!
-        corePoolSize: 1000
-        maxPoolSize: 2000
-        queueCapacity: 100 # Reduced queue to induce immediate thread scale-up
+zefio:
+  flows:
+    - name: extreme-orchestration-flow
+      label: "Core Engine 3 Pillars (Try, SG, Switch) Fully Integrated Flow"
+      options:
+        threadPool:
+          # 🚀 [Deterministic Prescription] Increased core size significantly to handle instantaneous bursts of 600+ threads!
+          corePoolSize: 1000
+          maxPoolSize: 2000
+          queueCapacity: 100 # Reduced queue to induce immediate thread scale-up
 
-    ingress:
-      name: from-client-extreme-51000
-      label: "HTTP Client Inbound (Isolated Port)"
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply      # 🚀 [Mandatory] Bidirectional contract to prevent infinite wait (Stuck)
-      config:
-        port: 51000                # Avoid port collisions for tests
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-
-    steps:
-      # ────────────────────────────────────────────────────────────────────────
-      # 🎯 Stage 0: Runtime Context Injection (Alchemy)
-      # Sets status values in advance so the following SWITCH can evaluate them.
-      # ────────────────────────────────────────────────────────────────────────
-      - name: init-transaction-context
-        type: SpELModifierInterceptor
+      ingress:
+        name: from-client-extreme-51000
+        label: "HTTP Client Inbound (Isolated Port)"
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply      # 🚀 [Mandatory] Bidirectional contract to prevent infinite wait (Stuck)
         config:
-          assignments:
-            - target: "payload.headers['USER_LEVEL']"
-              # 💡 [Core] First check if body['GLOBAL_TRX_ID'] is not null before calling startsWith.
-              # This ensures the condition evaluates clearly to boolean (true/false).
-              expression: "#{(body['GLOBAL_TRX_ID'] != null and body['GLOBAL_TRX_ID'].startsWith('VIP')) ? 'GOLD' : 'SILVER'}"
+          port: 51000                # Avoid port collisions for tests
+          requestEncoding: utf-8
+          responseEncoding: utf-8
 
-      # ────────────────────────────────────────────────────────────────────────
-      # 🎯 Stage 1 (Depth 1): Global Macro Timeout and Retry Defense (TRY_SCOPE)
-      # ────────────────────────────────────────────────────────────────────────
-      - name: macro-retry-scope
-        type: TRY_SCOPE
-        label: "Global Process Retry Scope"
-        retry:
-          enabled: true
-          maxRetries: 2
-          delay: 100
-          on-error: THROW # 🚀 Throw to global DLQ if failed twice
+      steps:
+        # ────────────────────────────────────────────────────────────────────────
+        # 🎯 Stage 0: Runtime Context Injection (Alchemy)
+        # Sets status values in advance so the following SWITCH can evaluate them.
+        # ────────────────────────────────────────────────────────────────────────
+        - name: init-transaction-context
+          type: SpELModifierInterceptor
+          config:
+            assignments:
+              - target: "payload.headers['USER_LEVEL']"
+                # 💡 [Core] First check if body['GLOBAL_TRX_ID'] is not null before calling startsWith.
+                # This ensures the condition evaluates clearly to boolean (true/false).
+                expression: "#{(body['GLOBAL_TRX_ID'] != null and body['GLOBAL_TRX_ID'].startsWith('VIP')) ? 'GOLD' : 'SILVER'}"
 
-        steps:
+        # ────────────────────────────────────────────────────────────────────────
+        # 🎯 Stage 1 (Depth 1): Global Macro Timeout and Retry Defense (TRY_SCOPE)
+        # ────────────────────────────────────────────────────────────────────────
+        - name: macro-retry-scope
+          type: TRY_SCOPE
+          label: "Global Process Retry Scope"
+          retry:
+            enabled: true
+            maxRetries: 2
+            delay: 100
+            on-error: THROW # 🚀 Throw to global DLQ if failed twice
 
-          # ────────────────────────────────────────────────────────────────────
-          # 🎯 Stage 2 (Depth 2): Composite Data Gathering Engine (SCATTER_GATHER)
-          # ────────────────────────────────────────────────────────────────────
-          - name: credit-agency-gather
-            type: SCATTER_GATHER
-            label: "Parallel Collection from 3 Credit Agencies"
-            config:
-              timeout: 3000             # 3-second global cutoff
-              aggregationType: MAP_MERGE
-              errorPolicy: BEST_EFFORT  # 🔥 Proceed even if errors occur!
+          steps:
 
-            steps:
-              # 🌿 Branch 1 (Depth 3): Intelligent Routing based on User Grade (SWITCH) 🚀 [Newly Added]
-              - name: agency-a-smart-router
-                type: SWITCH
-                label: "Routing Router by User Grade for Agency A"
-                cases:
-                  # VIP customers call precision-tuned XML-only service
-                  - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD'}"
-                    steps:
-                      - name: agency-a-premium
-                        type: DynamicLocalUpstream
-                        config:
-                          targetFlowExpression: "#{'flow-target-xml'}"
-                # Regular customers call lightweight JSON service
-                defaultSteps:
-                  - name: agency-a-standard
-                    type: DynamicLocalUpstream
-                    config:
-                      targetFlowExpression: "#{'flow-target-json'}"
-
-              # 🌿 Branch 2 (Depth 3): Error Isolation and Local Cache Recovery (TRY_SCOPE)
-              - name: agency-b-unstable-scope
-                type: TRY_SCOPE
-                on-error: FALLBACK # 🚀 Trigger recovery with cached data on error
-                steps:
-                  # Force an error using VALIDATOR instead of real communication
-                  - name: call-agency-b-fail
-                    type: SpELValidatorInterceptor
-                    config:
-                      condition: "#{false}" # 🔥 Forced error trigger
-                      errorMessage: "Agency B Connection Timeout"
-                      errorStatus: "TIMEOUT" # Trigger for retry
-                fallback-steps:
-                  # Inject cached data into context, replacing local Redis upon failure
-                  - name: fallback-cache-b
-                    type: SpELModifierInterceptor
-                    config:
-                      assignments:
-                        - target: "payload.headers['AGENCY_B_FALLBACK']"
-                          expression: "#{'CACHE_DATA_LOADED'}"
-
-              # 🌿 Branch 3 (Depth 3): Nested Parallel Processing (SCATTER_GATHER)
-              - name: agency-c-composite
-                type: SCATTER_GATHER
-                config:
-                  aggregationType: OVERRIDE  # 🔥 Overwrite strategy
-                  errorPolicy: FAIL_FAST     # Fail entire branch 3 if any child fails
-                steps:
-                  - name: agency-c-auth
-                    type: SpELModifierInterceptor
-                    config:
-                      assignments:
-                        - target: "payload.headers['AGENCY_C_AUTH']"
-                          expression: "#{'AUTH_OK'}"
-                  - name: agency-c-score
-                    type: DynamicLocalUpstream
-                    config:
-                      targetFlowExpression: "#{'flow-target-json'}"
-
-      # ────────────────────────────────────────────────────────────────────────
-      # 🎯 Stage 3 (Depth 1): Final Data Storage and Double Fallback
-      # ────────────────────────────────────────────────────────────────────────
-      - name: final-save-scope
-        type: TRY_SCOPE
-        label: "Final Result DB Storage (Double Fallback)"
-        on-error: FALLBACK # 🚀 Activate Plan-B if Main DB fails
-        steps:
-          # Main DB failure simulation (Always fails)
-          - name: save-to-main-db
-            type: SpELValidatorInterceptor
-            config:
-              condition: "#{false}"
-              errorMessage: "Main DB Deadlock"
-              errorStatus: "DATABASE_ERROR"
-
-        fallback-steps:
-          # 🔥 [Fallback 1] Try Sub DB
-          - name: fallback-sub-db-scope
-            type: TRY_SCOPE
-            on-error: FALLBACK # 🚀 Activate Plan-C if Sub DB fails
-            steps:
-              - name: save-to-sub-db
-                type: SpELValidatorInterceptor
-                config:
-                  condition: "#{false}"
-                  errorMessage: "Sub DB Refused"
-                  errorStatus: "DATABASE_ERROR"
-
-            fallback-steps:
-              # 🔥 [Fallback 2] Last Resort: Write to Local File Log
-              - name: save-to-local-file-log
-                type: LoggingInterceptor
-                config: { }
-              - name: restore-fixed-format-fallback
-                type: SpELModifierInterceptor
-                config:
-                  assignments:
-                    - target: "body['PREFIX']"
-                      expression: "#{'RES'}"
-                    - target: "body['TARGET_VAL']"
-                      expression: "#{'FBK'}" # Mark fallback success
-
-      # ────────────────────────────────────────────────────────────────────────
-      # 🚀 Stage 4 [Deterministic Prescription]: Format Restoration
-      # Blocks type errors caused by Map transformation attempts,
-      # and calls String.format inside SpEL to assemble the 96-byte spec perfectly!
-      # ────────────────────────────────────────────────────────────────────────
-      - name: restore-fixed-format
-        type: SpELModifierInterceptor
-        config:
-          assignments:
-            # 💡 [Important] Certain "Spec Laundry" at the final gate, even after bypassing all fallbacks
-            - target: "body['PREFIX']"
-              expression: "#{body['PREFIX'] == 'RES' ? 'RES' : 'ERR'}"
-            - target: "body['TARGET_VAL']"
-              expression: "#{'FIN'}"
-            - target: "body['GLOBAL_TRX_ID']"
-              expression: "#{payload.trxID}"
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # 🎯 Flow Level Error Handler (Global DLQ)
-    # ──────────────────────────────────────────────────────────────────────────
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
-
-
-  # ==============================================================================
-  # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
-  # ==============================================================================
-  - name: flow-target-xml
-    label: "XML Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-xml
-      type: LocalIngress                 # Internal dummy type
-      telegram: fixed-http-req   # Maintain identical telegram spec with main flow
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-xml
-        label: "Call Global XML Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
-            - name: "Direct to XML Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: xml-tcp-delimiter
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
+            # ────────────────────────────────────────────────────────────────────
+            # 🎯 Stage 2 (Depth 2): Composite Data Gathering Engine (SCATTER_GATHER)
+            # ────────────────────────────────────────────────────────────────────
+            - name: credit-agency-gather
+              type: SCATTER_GATHER
+              label: "Parallel Collection from 3 Credit Agencies"
               config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/xml
-                requestEncoding: utf-8
-                responseEncoding: utf-8
+                timeout: 3000             # 3-second global cutoff
+                aggregationType: MAP_MERGE
+                errorPolicy: BEST_EFFORT  # 🔥 Proceed even if errors occur!
 
-  # ==============================================================================
-  # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
-  # ==============================================================================
-  - name: flow-target-json
-    label: "JSON Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-json
-      type: LocalIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-json
-        label: "Call Global JSON Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
-            - name: "Direct to JSON Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: json-standard
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
+              steps:
+                # 🌿 Branch 1 (Depth 3): Intelligent Routing based on User Grade (SWITCH) 🚀 [Newly Added]
+                - name: agency-a-smart-router
+                  type: SWITCH
+                  label: "Routing Router by User Grade for Agency A"
+                  cases:
+                    # VIP customers call precision-tuned XML-only service
+                    - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD'}"
+                      steps:
+                        - name: agency-a-premium
+                          type: DynamicLocalUpstream
+                          config:
+                            targetFlowExpression: "#{'flow-target-xml'}"
+                  # Regular customers call lightweight JSON service
+                  defaultSteps:
+                    - name: agency-a-standard
+                      type: DynamicLocalUpstream
+                      config:
+                        targetFlowExpression: "#{'flow-target-json'}"
+
+                # 🌿 Branch 2 (Depth 3): Error Isolation and Local Cache Recovery (TRY_SCOPE)
+                - name: agency-b-unstable-scope
+                  type: TRY_SCOPE
+                  on-error: FALLBACK # 🚀 Trigger recovery with cached data on error
+                  steps:
+                    # Force an error using VALIDATOR instead of real communication
+                    - name: call-agency-b-fail
+                      type: SpELValidatorInterceptor
+                      config:
+                        condition: "#{false}" # 🔥 Forced error trigger
+                        errorMessage: "Agency B Connection Timeout"
+                        errorStatus: "TIMEOUT" # Trigger for retry
+                  fallback-steps:
+                    # Inject cached data into context, replacing local Redis upon failure
+                    - name: fallback-cache-b
+                      type: SpELModifierInterceptor
+                      config:
+                        assignments:
+                          - target: "payload.headers['AGENCY_B_FALLBACK']"
+                            expression: "#{'CACHE_DATA_LOADED'}"
+
+                # 🌿 Branch 3 (Depth 3): Nested Parallel Processing (SCATTER_GATHER)
+                - name: agency-c-composite
+                  type: SCATTER_GATHER
+                  config:
+                    aggregationType: OVERRIDE  # 🔥 Overwrite strategy
+                    errorPolicy: FAIL_FAST     # Fail entire branch 3 if any child fails
+                  steps:
+                    - name: agency-c-auth
+                      type: SpELModifierInterceptor
+                      config:
+                        assignments:
+                          - target: "payload.headers['AGENCY_C_AUTH']"
+                            expression: "#{'AUTH_OK'}"
+                    - name: agency-c-score
+                      type: DynamicLocalUpstream
+                      config:
+                        targetFlowExpression: "#{'flow-target-json'}"
+
+        # ────────────────────────────────────────────────────────────────────────
+        # 🎯 Stage 3 (Depth 1): Final Data Storage and Double Fallback
+        # ────────────────────────────────────────────────────────────────────────
+        - name: final-save-scope
+          type: TRY_SCOPE
+          label: "Final Result DB Storage (Double Fallback)"
+          on-error: FALLBACK # 🚀 Activate Plan-B if Main DB fails
+          steps:
+            # Main DB failure simulation (Always fails)
+            - name: save-to-main-db
+              type: SpELValidatorInterceptor
               config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/json
-                requestEncoding: utf-8
-                responseEncoding: utf-8
+                condition: "#{false}"
+                errorMessage: "Main DB Deadlock"
+                errorStatus: "DATABASE_ERROR"
+
+          fallback-steps:
+            # 🔥 [Fallback 1] Try Sub DB
+            - name: fallback-sub-db-scope
+              type: TRY_SCOPE
+              on-error: FALLBACK # 🚀 Activate Plan-C if Sub DB fails
+              steps:
+                - name: save-to-sub-db
+                  type: SpELValidatorInterceptor
+                  config:
+                    condition: "#{false}"
+                    errorMessage: "Sub DB Refused"
+                    errorStatus: "DATABASE_ERROR"
+
+              fallback-steps:
+                # 🔥 [Fallback 2] Last Resort: Write to Local File Log
+                - name: save-to-local-file-log
+                  type: LoggingInterceptor
+                  config: { }
+                - name: restore-fixed-format-fallback
+                  type: SpELModifierInterceptor
+                  config:
+                    assignments:
+                      - target: "body['PREFIX']"
+                        expression: "#{'RES'}"
+                      - target: "body['TARGET_VAL']"
+                        expression: "#{'FBK'}" # Mark fallback success
+
+        # ────────────────────────────────────────────────────────────────────────
+        # 🚀 Stage 4 [Deterministic Prescription]: Format Restoration
+        # Blocks type errors caused by Map transformation attempts,
+        # and calls String.format inside SpEL to assemble the 96-byte spec perfectly!
+        # ────────────────────────────────────────────────────────────────────────
+        - name: restore-fixed-format
+          type: SpELModifierInterceptor
+          config:
+            assignments:
+              # 💡 [Important] Certain "Spec Laundry" at the final gate, even after bypassing all fallbacks
+              - target: "body['PREFIX']"
+                expression: "#{body['PREFIX'] == 'RES' ? 'RES' : 'ERR'}"
+              - target: "body['TARGET_VAL']"
+                expression: "#{'FIN'}"
+              - target: "body['GLOBAL_TRX_ID']"
+                expression: "#{payload.trxID}"
+
+      # ──────────────────────────────────────────────────────────────────────────
+      # 🎯 Flow Level Error Handler (Global DLQ)
+      # ──────────────────────────────────────────────────────────────────────────
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null
+
+
+    # ==============================================================================
+    # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
+    # ==============================================================================
+    - name: flow-target-xml
+      label: "XML Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-xml
+        type: LocalIngress                 # Internal dummy type
+        telegram: fixed-http-req   # Maintain identical telegram spec with main flow
+        exchangePattern: RequestReply
+      steps:
+        - name: extreme-call-global-xml
+          label: "Call Global XML Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
+              - name: "Direct to XML Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: xml-tcp-delimiter
+                exchangePattern: RequestReply
+                retry:
+                  enabled: false
+                config:
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/xml
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8
+
+    # ==============================================================================
+    # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
+    # ==============================================================================
+    - name: flow-target-json
+      label: "JSON Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-json
+        type: LocalIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+      steps:
+        - name: extreme-call-global-json
+          label: "Call Global JSON Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
+              - name: "Direct to JSON Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: json-standard
+                exchangePattern: RequestReply
+                retry:
+                  enabled: false
+                config:
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/json
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8

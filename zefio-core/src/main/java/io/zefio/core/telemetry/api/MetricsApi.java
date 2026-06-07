@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.common.base.PluginType;
-import io.zefio.core.config.flow.FlowSettings;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.telemetry.module.ModuleMetricsAggregator;
 import io.zefio.core.telemetry.netty.NettyEventLoopStateTracker;
 import org.slf4j.Logger;
@@ -33,7 +33,7 @@ public class MetricsApi {
     private final Logger log = LoggerFactory.getLogger(getClass());
     private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
-    public MetricsApi(FlowSettings flowSettings) {
+    public MetricsApi(ZefioEngineProperties zefioEngineProperties) {
         mapper.findAndRegisterModules();
         this.mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, true);
         this.mapper.configure(SerializationFeature.WRITE_ENUMS_USING_TO_STRING, true);

@@ -1,6 +1,6 @@
 package io.zefio.core.telemetry.cp;
 
-import io.zefio.core.config.ZefioProperties;
+import io.zefio.core.config.ZefioEngineProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,8 +14,8 @@ import java.net.URI;
 public class RedisConfig {
 
     @Bean
-    public JedisPool jedisPool(ZefioProperties zefioProperties) {
-        String redisUrlStr = zefioProperties.getCp().getRedis().getUrl();
+    public JedisPool jedisPool(ZefioEngineProperties zefioEngineProperties) {
+        String redisUrlStr = zefioEngineProperties.getCp().getRedis().getUrl();
         log.info("[RedisConfig] Initializing global JedisPool: {}", redisUrlStr);
 
         try {

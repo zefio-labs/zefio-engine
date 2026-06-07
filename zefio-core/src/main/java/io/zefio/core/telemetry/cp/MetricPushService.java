@@ -3,18 +3,14 @@ package io.zefio.core.telemetry.cp;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.zefio.core.config.ZefioProperties;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.telemetry.MonitorConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Scheduled service responsible for extracting telemetry data from
@@ -26,12 +22,12 @@ import java.util.Map;
 public class MetricPushService {
 
     private final MeterRegistry meterRegistry;
-    private final ZefioProperties zefioProperties;
+    private final ZefioEngineProperties zefioEngineProperties;
     private final ZefioCpRedisPublisher cpRedisPublisher;
 
     @Scheduled(fixedRateString = "${zefio.cp.metrics.push-interval-ms:3000}")
     public void pushMetricsToCP() {
-        if (!zefioProperties.getCp().isEnabled()) {
+        if (!zefioEngineProperties.getCp().isEnabled()) {
             return;
         }
 
@@ -60,7 +56,7 @@ public class MetricPushService {
             // 4. Assemble and dispatch the Redis Message
             Map<String, Object> redisMessage = new HashMap<>();
             redisMessage.put("type", "metrics");
-            redisMessage.put("nodeId", zefioProperties.getNode().getId());
+            redisMessage.put("nodeId", zefioEngineProperties.getNode().getId());
             redisMessage.put("payload", payload);
 
             cpRedisPublisher.sendMessage(redisMessage);

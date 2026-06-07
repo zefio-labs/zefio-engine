@@ -2,112 +2,113 @@
 # Filename: flows/flow-scatter-basic.yaml
 # Description: SCATTER_GATHER parallel aggregation and hierarchical error control verification
 # ==============================================================================
-flows:
-  - name: scatter-basic-flow
-    label: "SCATTER_GATHER Single Validation Flow"
-    options:
-      threadPool:
-        corePoolSize: 10
-        maxPoolSize: 20
-        queueCapacity: 50
+zefio:
+  flows:
+    - name: scatter-basic-flow
+      label: "SCATTER_GATHER Single Validation Flow"
+      options:
+        threadPool:
+          corePoolSize: 10
+          maxPoolSize: 20
+          queueCapacity: 50
 
-    ingress:
-      name: from-client-scatter-51002
-      label: "HTTP Client Inbound"
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51002
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
+      ingress:
+        name: from-client-scatter-51002
+        label: "HTTP Client Inbound"
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+        config:
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51002
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-    steps:
-      # ========================================================================
-      # 🛡️ Outer Scope: Isolate exceptions occurring during the parallel process
-      # ========================================================================
-      - name: scatter-isolation-scope
-        type: TRY_SCOPE
-        on-error: FALLBACK # 🚀 Execute bypass path if total aggregation fails
+      steps:
+        # ========================================================================
+        # 🛡️ Outer Scope: Isolate exceptions occurring during the parallel process
+        # ========================================================================
+        - name: scatter-isolation-scope
+          type: TRY_SCOPE
+          on-error: FALLBACK # 🚀 Execute bypass path if total aggregation fails
 
-        steps:
-          - name: basic-scatter-gather
-            type: SCATTER_GATHER
-            label: "Parallel execution and aggregation of 3 branches"
-            config:
-              timeout: 3000
-              aggregationType: MAP_MERGE  # Serialize branch results into a Map
-              errorPolicy: FAIL_FAST # 💡 Trigger TRY_SCOPE if any branch fails
-            steps:
-              # 🌿 Branch 1: Success (Pass-through)
-              - name: branch-a-success
-                type: SpELModifierInterceptor
-                config:
-                  assignments:
-                    - target: "payload.headers['BRANCH_A']"
-                      expression: "#{'SUCCESS'}"
+          steps:
+            - name: basic-scatter-gather
+              type: SCATTER_GATHER
+              label: "Parallel execution and aggregation of 3 branches"
+              config:
+                timeout: 3000
+                aggregationType: MAP_MERGE  # Serialize branch results into a Map
+                errorPolicy: FAIL_FAST # 💡 Trigger TRY_SCOPE if any branch fails
+              steps:
+                # 🌿 Branch 1: Success (Pass-through)
+                - name: branch-a-success
+                  type: SpELModifierInterceptor
+                  config:
+                    assignments:
+                      - target: "payload.headers['BRANCH_A']"
+                        expression: "#{'SUCCESS'}"
 
-              # 🔥 Branch B: Error after retry (Nested TRY_SCOPE)
-              - name: branch-b-retry-scope
-                type: TRY_SCOPE
-                retry:
-                  enabled: true # 🚀 [Key] Decide retry policy per branch
-                  maxRetries: 3
-                  delay: 200
-                on-error: THROW # 💡 Report error to Scatter if all 3 retries fail
-                steps:
-                  - name: branch-b-fail
-                    type: SpELValidatorInterceptor
-                    config:
-                      condition: "#{false}"
-                      errorMessage: "Forced Error in Branch B"
-                      errorStatus: "TIMEOUT" # 💡 Faked as TIMEOUT to trigger retries
+                # 🔥 Branch B: Error after retry (Nested TRY_SCOPE)
+                - name: branch-b-retry-scope
+                  type: TRY_SCOPE
+                  retry:
+                    enabled: true # 🚀 [Key] Decide retry policy per branch
+                    maxRetries: 3
+                    delay: 200
+                  on-error: THROW # 💡 Report error to Scatter if all 3 retries fail
+                  steps:
+                    - name: branch-b-fail
+                      type: SpELValidatorInterceptor
+                      config:
+                        condition: "#{false}"
+                        errorMessage: "Forced Error in Branch B"
+                        errorStatus: "TIMEOUT" # 💡 Faked as TIMEOUT to trigger retries
 
-              # 🌿 Branch 3: Success (Pass-through)
-              - name: branch-c-success
-                type: SpELModifierInterceptor
-                config:
-                  assignments:
-                    - target: "payload.headers['BRANCH_C']"
-                      expression: "#{'SUCCESS'}"
+                # 🌿 Branch 3: Success (Pass-through)
+                - name: branch-c-success
+                  type: SpELModifierInterceptor
+                  config:
+                    assignments:
+                      - target: "payload.headers['BRANCH_C']"
+                        expression: "#{'SUCCESS'}"
 
-        # 🚑 [Global Bypass Path] Recovery logic if data is corrupted or an error occurs
-        fallback-steps:
-          - name: fallback-restore-format
-            type: SpELModifierInterceptor
-            config:
-              assignments:
-                - target: "body['PREFIX']"
-                  expression: "#{'RES'}"
-                - target: "body['TARGET_VAL']"
-                  expression: "#{'S_G'}"
-                - target: "body['DUMMY_HEADER']"
-                  expression: "#{'Aggregated with Partial Failures'}"
-                - target: "body['GLOBAL_TRX_ID']"
-                  expression: "#{payload.trxID}"
+          # 🚑 [Global Bypass Path] Recovery logic if data is corrupted or an error occurs
+          fallback-steps:
+            - name: fallback-restore-format
+              type: SpELModifierInterceptor
+              config:
+                assignments:
+                  - target: "body['PREFIX']"
+                    expression: "#{'RES'}"
+                  - target: "body['TARGET_VAL']"
+                    expression: "#{'S_G'}"
+                  - target: "body['DUMMY_HEADER']"
+                    expression: "#{'Aggregated with Partial Failures'}"
+                  - target: "body['GLOBAL_TRX_ID']"
+                    expression: "#{payload.trxID}"
 
-      # 📊 Log final merged result
-      - name: log-merged-body
-        type: LoggingInterceptor
-        config: { }
+        # 📊 Log final merged result
+        - name: log-merged-body
+          type: LoggingInterceptor
+          config: { }
 
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

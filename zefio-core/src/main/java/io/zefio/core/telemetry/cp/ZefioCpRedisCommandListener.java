@@ -5,8 +5,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.beans.FlowSettingsBean;
-import io.zefio.core.config.ZefioProperties;
-import io.zefio.core.config.flow.FlowSettings;
+import io.zefio.core.beans.FlowSettingsBean.DeploymentPayload;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.config.flow.TelegramsConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,11 +30,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ZefioCpRedisCommandListener implements InitializingBean, DisposableBean {
 
-    private final ZefioProperties zefioProperties;
+    private final ZefioEngineProperties zefioEngineProperties;
     private final JedisPool jedisPool;
-    private final FlowSettingsBean flowSettingsBean; // The engine orchestrator for hot-swapping
+    private final FlowSettingsBean flowSettingsBean;
 
-    // 💡 Defensively enabled FAIL_ON_UNKNOWN_PROPERTIES to avoid crashing during minor grammar mutations
     private final ObjectMapper jsonMapper = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory())
@@ -46,7 +45,6 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
     @Override
     public void afterPropertiesSet() {
         subscriberThread = new Thread(() -> {
-            // Use the injected jedisPool for subscription
             try (Jedis jedis = jedisPool.getResource()) {
                 pubSub = new JedisPubSub() {
                     @Override
@@ -68,35 +66,28 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
     @SuppressWarnings("unchecked")
     private void handleCommand(String jsonMessage) {
         try {
-            // 1. Parse the incoming JSON command
             Map<String, Object> command = jsonMapper.readValue(jsonMessage, new TypeReference<Map<String, Object>>() {});
 
-            // 2. Target Group filtering to ensure only relevant nodes process this command
             String targetGroup = (String) command.getOrDefault("targetGroup", "main");
-            if (!targetGroup.equals(zefioProperties.getNode().getGroup())) {
+            if (!targetGroup.equals(zefioEngineProperties.getNode().getGroup())) {
                 log.debug("[CP-Agent] Command ignored. Node group mismatch. (Expected: {}, Actual: {})",
-                        targetGroup, zefioProperties.getNode().getGroup());
+                        targetGroup, zefioEngineProperties.getNode().getGroup());
                 return;
             }
 
-            // 3. Process hot-reload action
             if ("hot-reload".equals(command.get("action"))) {
                 Map<String, Object> payload = (Map<String, Object>) command.get("payload");
 
-                // 💡 Extract decoupled distinct properties sent independently from the CP
                 String flowsYaml = (String) payload.get("flowsYaml");
                 Map<String, Object> rawTelegrams = (Map<String, Object>) payload.get("telegrams");
-
-                // Extract deployId to correlate the response. Default to "unknown" if not provided by CP.
                 String deployId = (String) command.getOrDefault("deployId", "unknown");
 
-                log.info("🔥 [CP-Agent] Hot-Reloading Pipeline on Node: {}", zefioProperties.getNode().getId());
+                log.info("🔥 [CP-Agent] Hot-Reloading Pipeline on Node: {}", zefioEngineProperties.getNode().getId());
 
                 try {
-                    // 4. Convert clean pure flows YAML string directly to FlowSettings object
-                    FlowSettings newSettings = yamlMapper.readValue(flowsYaml, FlowSettings.class);
+                    // Map target class type to the newly introduced inner structural DeploymentPayload
+                    DeploymentPayload newSettings = yamlMapper.readValue(flowsYaml, DeploymentPayload.class);
 
-                    // 💡 Map and inject the natively decoupled JSON telegrams matrix directly into the active configuration spec
                     if (rawTelegrams != null && !rawTelegrams.isEmpty()) {
                         Map<String, TelegramsConfiguration> typedTelegrams = jsonMapper.convertValue(
                                 rawTelegrams,
@@ -105,18 +96,13 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
                         newSettings.setTelegrams(typedTelegrams);
                     }
 
-                    // Trigger hotSwap sequence within the engine bean layer
                     flowSettingsBean.hotSwap(newSettings);
 
                     log.info("✅ [CP-Agent] Pipeline hot-swap completed.");
-
-                    // 5. Report success back to Control Plane
-                    reportStatusToCp(deployId, "SUCCESS", "Deployment successful on node: " + zefioProperties.getNode().getId());
+                    reportStatusToCp(deployId, "SUCCESS", "Deployment successful on node: " + zefioEngineProperties.getNode().getId());
 
                 } catch (Exception e) {
                     log.error("❌ [CP-Agent] Pipeline hot-swap FAILED: {}", e.getMessage());
-
-                    // 5. Report failure back to Control Plane so the UI does not hang or show a false positive
                     reportStatusToCp(deployId, "FAILED", e.getMessage());
                 }
             }
@@ -125,27 +111,17 @@ public class ZefioCpRedisCommandListener implements InitializingBean, Disposable
         }
     }
 
-    /**
-     * Asynchronously reports the deployment status back to the Control Plane via Redis.
-     * This prevents false positives by ensuring the CP knows exactly what happened on the DP node.
-     *
-     * @param deployId The unique identifier of the deployment request.
-     * @param status The result status ("SUCCESS" or "FAILED").
-     * @param errorMessage Detailed message or error description.
-     */
     private void reportStatusToCp(String deployId, String status, String errorMessage) {
         try (Jedis jedis = jedisPool.getResource()) {
             Map<String, Object> response = new HashMap<>();
-            response.put("nodeId", zefioProperties.getNode().getId());
-            response.put("group", zefioProperties.getNode().getGroup());
+            response.put("nodeId", zefioEngineProperties.getNode().getId());
+            response.put("group", zefioEngineProperties.getNode().getGroup());
             response.put("deployId", deployId);
             response.put("status", status);
             response.put("message", errorMessage);
             response.put("timestamp", System.currentTimeMillis());
 
             String jsonResponse = jsonMapper.writeValueAsString(response);
-
-            // Publish the result to the status channel monitored by the CP WebSocket server
             jedis.publish("zefio:deploy:status", jsonResponse);
 
             log.debug("[CP-Agent] Published deployment status to CP: {}", status);

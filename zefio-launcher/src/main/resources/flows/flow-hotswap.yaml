@@ -1,83 +1,84 @@
 # ==============================================================================
 # Filename: flows/flow-hotswap.yaml.yaml
 # ==============================================================================
-flows:
-  - name: inbound
-    label: "9_HTTP_TO_HTTP_Massive"
-    options:
-      threadPool:
-        corePoolSize: 200
-        maxPoolSize: 400
-        queueCapacity: 0
-        autoScaling:
-          enabled: true
-          threshold: 0.7
-          checkInterval: 5
-          scaleUpStep: 30
-          scaleDownStep: 10
-      cpuQueue:
-        capacity: 50000
-      ioQueue:
-        capacity: 20000
+zefio:
+  flows:
+    - name: inbound
+      label: "9_HTTP_TO_HTTP_Massive"
+      options:
+        threadPool:
+          corePoolSize: 200
+          maxPoolSize: 400
+          queueCapacity: 0
+          autoScaling:
+            enabled: true
+            threshold: 0.7
+            checkInterval: 5
+            scaleUpStep: 30
+            scaleDownStep: 10
+        cpuQueue:
+          capacity: 50000
+        ioQueue:
+          capacity: 20000
 
-    ingress:
-      name: from
-      label: "HTTP Inbound (51009)"
-      type: HttpIngress
-      telegram: fixed-standard
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        readTimeout: 10000
-        transactionTimeoutMillis: 15000
-        responseMatchingType: session
-        keepAlive: false
-        port: 51009
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-
-    # 🎯 Upstream: Synchronous (Sync) HTTP 1,000 Pool
-    steps:
-      - name: to
-        label: "Target Request (HTTP_Massive)"
-        type: HttpUpstream
+      ingress:
+        name: from
+        label: "HTTP Inbound (51009)"
+        type: HttpIngress
         telegram: fixed-standard
         exchangePattern: RequestReply
-        retry:
-          enabled: false
         config:
-          workThreadCount: 8
-          connectTimeout: 3000
-          soKeepAlive: false
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
           tcpNoDelay: true
           soReUseAddr: true
-          readTimeout: 5000
-          transactionTimeoutMillis: 10000
+          readTimeout: 10000
+          transactionTimeoutMillis: 15000
           responseMatchingType: session
           keepAlive: false
-          poolMaxSize: 0
-          onceMaxRetries: 3
-          onceTryTimeoutMillis: 2000
-          onceBackoffDelayMillis: 500
-          host: localhost
-          port: 51109
-          requestContentType: text/plain
-          requestHttpMethod: POST
-          requestPath: service/
+          port: 51009
           requestEncoding: utf-8
           responseEncoding: utf-8
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+          responseContentType: text/plain
+
+      # 🎯 Upstream: Synchronous (Sync) HTTP 1,000 Pool
+      steps:
+        - name: to
+          label: "Target Request (HTTP_Massive)"
+          type: HttpUpstream
+          telegram: fixed-standard
+          exchangePattern: RequestReply
+          retry:
+            enabled: false
+          config:
+            workThreadCount: 8
+            connectTimeout: 3000
+            soKeepAlive: false
+            tcpNoDelay: true
+            soReUseAddr: true
+            readTimeout: 5000
+            transactionTimeoutMillis: 10000
+            responseMatchingType: session
+            keepAlive: false
+            poolMaxSize: 0
+            onceMaxRetries: 3
+            onceTryTimeoutMillis: 2000
+            onceBackoffDelayMillis: 500
+            host: localhost
+            port: 51109
+            requestContentType: text/plain
+            requestHttpMethod: POST
+            requestPath: service/
+            requestEncoding: utf-8
+            responseEncoding: utf-8
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

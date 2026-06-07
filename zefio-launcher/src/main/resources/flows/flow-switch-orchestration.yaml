@@ -2,219 +2,220 @@
 # Filename: flows/flow-switch-orchestration.yaml
 # Description: Intelligent routing based on SwitchProcessor and hierarchical error control
 # ==============================================================================
-flows:
-  - name: flow-switch-main
-    label: "SpEL Intelligent Switch Router Test Flow"
+zefio:
+  flows:
+    - name: flow-switch-main
+      label: "SpEL Intelligent Switch Router Test Flow"
 
-    ingress:
-      name: from-http-switch-51003
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51003
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
-
-    steps:
-      # [Step 1] Guardrail: First line of defense (Block if not 'ABC')
-      - name: validate-payload
-        type: SpELValidatorInterceptor
+      ingress:
+        name: from-http-switch-51003
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
         config:
-          condition: "#{body['TARGET_VAL'] == 'ABC'}"
-          errorMessage: "Guardrail Blocked"
-          errorStatus: "VALIDATION_FAILED"
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51003
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-      # [Step 2] Data Alchemy: Body mutation and context generation 🚀
-      - name: modify-fixed-body
-        type: SpELModifierInterceptor
-        config:
-          assignments:
-            - target: "body['TARGET_VAL']"
-              expression: "#{'XYZ'}"
-            - target: "body['PREFIX']"
-              expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
-            - target: "payload.headers['REQ_AMT']"
-              expression: "#{150000}"
-            - target: "payload.headers['USER_LEVEL']"
-              expression: "#{body['GLOBAL_TRX_ID'].startsWith('VIP') ? 'GOLD' : 'SILVER'}"
+      steps:
+        # [Step 1] Guardrail: First line of defense (Block if not 'ABC')
+        - name: validate-payload
+          type: SpELValidatorInterceptor
+          config:
+            condition: "#{body['TARGET_VAL'] == 'ABC'}"
+            errorMessage: "Guardrail Blocked"
+            errorStatus: "VALIDATION_FAILED"
 
-      # [Step 3] SWITCH: Intelligent Orchestrator
-      - name: main-switch-router
-        type: SWITCH
-        cases:
-          # ────────────────────────────────────────────────────────────────────
-          # [Case 1] VIP High-Value Transaction: 5 retries and fallback applied
-          # ────────────────────────────────────────────────────────────────────
-          - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD' and payload.headers['REQ_AMT'] > 100000}"
-            steps:
-              - name: vip-scope
-                type: TRY_SCOPE
+        # [Step 2] Data Alchemy: Body mutation and context generation 🚀
+        - name: modify-fixed-body
+          type: SpELModifierInterceptor
+          config:
+            assignments:
+              - target: "body['TARGET_VAL']"
+                expression: "#{'XYZ'}"
+              - target: "body['PREFIX']"
+                expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
+              - target: "payload.headers['REQ_AMT']"
+                expression: "#{150000}"
+              - target: "payload.headers['USER_LEVEL']"
+                expression: "#{body['GLOBAL_TRX_ID'].startsWith('VIP') ? 'GOLD' : 'SILVER'}"
+
+        # [Step 3] SWITCH: Intelligent Orchestrator
+        - name: main-switch-router
+          type: SWITCH
+          cases:
+            # ────────────────────────────────────────────────────────────────────
+            # [Case 1] VIP High-Value Transaction: 5 retries and fallback applied
+            # ────────────────────────────────────────────────────────────────────
+            - condition: "#{payload.headers['USER_LEVEL'] == 'GOLD' and payload.headers['REQ_AMT'] > 100000}"
+              steps:
+                - name: vip-scope
+                  type: TRY_SCOPE
+                  retry:
+                    enabled: true
+                    maxRetries: 5
+                    delay: 200
+                  on-error: FALLBACK
+                  steps:
+                    - name: call-vip-service
+                      type: DynamicLocalUpstream
+                      config:
+                        targetFlowExpression: "#{'flow-target-xml'}"
+                  fallback-steps:
+                    - name: vip-fallback-modifier
+                      type: SpELModifierInterceptor
+                      config:
+                        assignments:
+                          - target: "body['DUMMY_HEADER']"
+                            expression: "#{'VIP_SERVICE_TEMPORARILY_UNAVAILABLE'}"
+
+            # ────────────────────────────────────────────────────────────────────
+            # [Case 2] Regex-based Mobile Filtering: 3 retries and logging
+            # ────────────────────────────────────────────────────────────────────
+            - condition: "#{body['PREFIX'] matches '^[M][0-9]{2}$'}" # Matches M01, M02, etc.
+              steps:
+                - name: mobile-scope
+                  type: TRY_SCOPE
+                  retry:
+                    enabled: true
+                    maxRetries: 3
+                    delay: 500
+                  on-error: THROW # 💡 Mobile failures are critical; throw to parent DLQ
+                  steps:
+                    - name: mobile-logger
+                      type: LoggingInterceptor
+                      config: { message: "Mobile Traffic Detected: #{body['PREFIX']}" }
+                    - name: call-mobile-service
+                      type: DynamicLocalUpstream
+                      config:
+                        targetFlowExpression: "#{'flow-target-json'}"
+
+            # ────────────────────────────────────────────────────────────────────
+            # [Case 3] Standard Transaction (XYZ conversion complete): Standard call
+            # ────────────────────────────────────────────────────────────────────
+            - condition: "#{body['TARGET_VAL'] == 'ABC'}"
+              steps:
+                - name: direct-to-json
+                  type: DynamicLocalUpstream
+                  config:
+                    targetFlowExpression: "#{'flow-target-json'}"
+
+          # ──────────────────────────────────────────────────────────────────────
+          # [Default] No match found: Safe fallback path
+          # ──────────────────────────────────────────────────────────────────────
+          defaultSteps:
+            - name: default-fallback-logger
+              type: LoggingInterceptor
+              config: { message: "No match found. Routing to Default JSON Path." }
+            - name: call-default-json
+              type: DynamicLocalUpstream
+              config:
+                targetFlowExpression: "#{'flow-target-json'}"
+
+      # Global Error Handler (Flow Level DLQ)
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null
+
+    # ==============================================================================
+    # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
+    # ==============================================================================
+    - name: flow-target-xml
+      label: "XML Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-xml
+        type: LocalIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+      steps:
+        - name: switch-call-global-xml
+          label: "Call Global XML Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              - name: "Direct to XML Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: xml-tcp-delimiter
+                exchangePattern: RequestReply
                 retry:
-                  enabled: true
-                  maxRetries: 5
-                  delay: 200
-                on-error: FALLBACK
-                steps:
-                  - name: call-vip-service
-                    type: DynamicLocalUpstream
-                    config:
-                      targetFlowExpression: "#{'flow-target-xml'}"
-                fallback-steps:
-                  - name: vip-fallback-modifier
-                    type: SpELModifierInterceptor
-                    config:
-                      assignments:
-                        - target: "body['DUMMY_HEADER']"
-                          expression: "#{'VIP_SERVICE_TEMPORARILY_UNAVAILABLE'}"
-
-          # ────────────────────────────────────────────────────────────────────
-          # [Case 2] Regex-based Mobile Filtering: 3 retries and logging
-          # ────────────────────────────────────────────────────────────────────
-          - condition: "#{body['PREFIX'] matches '^[M][0-9]{2}$'}" # Matches M01, M02, etc.
-            steps:
-              - name: mobile-scope
-                type: TRY_SCOPE
-                retry:
-                  enabled: true
-                  maxRetries: 3
-                  delay: 500
-                on-error: THROW # 💡 Mobile failures are critical; throw to parent DLQ
-                steps:
-                  - name: mobile-logger
-                    type: LoggingInterceptor
-                    config: { message: "Mobile Traffic Detected: #{body['PREFIX']}" }
-                  - name: call-mobile-service
-                    type: DynamicLocalUpstream
-                    config:
-                      targetFlowExpression: "#{'flow-target-json'}"
-
-          # ────────────────────────────────────────────────────────────────────
-          # [Case 3] Standard Transaction (XYZ conversion complete): Standard call
-          # ────────────────────────────────────────────────────────────────────
-          - condition: "#{body['TARGET_VAL'] == 'ABC'}"
-            steps:
-              - name: direct-to-json
-                type: DynamicLocalUpstream
+                  enabled: false
                 config:
-                  targetFlowExpression: "#{'flow-target-json'}"
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/xml
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8
 
-        # ──────────────────────────────────────────────────────────────────────
-        # [Default] No match found: Safe fallback path
-        # ──────────────────────────────────────────────────────────────────────
-        defaultSteps:
-          - name: default-fallback-logger
-            type: LoggingInterceptor
-            config: { message: "No match found. Routing to Default JSON Path." }
-          - name: call-default-json
-            type: DynamicLocalUpstream
-            config:
-              targetFlowExpression: "#{'flow-target-json'}"
-
-    # Global Error Handler (Flow Level DLQ)
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
-
-  # ==============================================================================
-  # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
-  # ==============================================================================
-  - name: flow-target-xml
-    label: "XML Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-xml
-      type: LocalIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-xml
-        label: "Call Global XML Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            - name: "Direct to XML Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: xml-tcp-delimiter
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
-              config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/xml
-                requestEncoding: utf-8
-                responseEncoding: utf-8
-
-  # ==============================================================================
-  # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
-  # ==============================================================================
-  - name: flow-target-json
-    label: "JSON Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-json
-      type: LocalIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-json
-        label: "Call Global JSON Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            - name: "Direct to JSON Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: json-standard
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
-              config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/json
-                requestEncoding: utf-8
-                responseEncoding: utf-8
+    # ==============================================================================
+    # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
+    # ==============================================================================
+    - name: flow-target-json
+      label: "JSON Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-json
+        type: LocalIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+      steps:
+        - name: switch-call-global-json
+          label: "Call Global JSON Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              - name: "Direct to JSON Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: json-standard
+                exchangePattern: RequestReply
+                retry:
+                  enabled: false
+                config:
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/json
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8

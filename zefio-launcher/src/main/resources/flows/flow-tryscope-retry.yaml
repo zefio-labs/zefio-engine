@@ -2,75 +2,76 @@
 # Filename: flows/flow-tryscope-retry.yaml
 # Description: TRY_SCOPE nested structure for RETRY -> FALLBACK chain verification
 # ==============================================================================
-flows:
-  - name: tryscope-retry-flow
-    options:
-      threadPool:
-        corePoolSize: 10
-    ingress:
-      name: from-client-retry-51005
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51005
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
+zefio:
+  flows:
+    - name: tryscope-retry-flow
+      options:
+        threadPool:
+          corePoolSize: 10
+      ingress:
+        name: from-client-retry-51005
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+        config:
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51005
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-    steps:
-      # ========================================================================
-      # 🛡️ Outer Scope: Defends Plan B by catching errors that propagated from retries
-      # ========================================================================
-      - name: outer-fallback-scope
-        type: TRY_SCOPE
-        on-error: FALLBACK  # Execute fallback-steps if an error occurs
-
-        steps:
-          # ====================================================================
-          # 🔄 Inner Scope: Retry 3 times upon error (500ms delay between attempts)
-          # ====================================================================
-          - name: inner-retry-scope
-            type: TRY_SCOPE
-
-            retry:
-              enabled: true
-              maxRetries: 3
-              delay: 500 # Requires over 1.5 seconds if 3 retries occur
-
-            # 🚀 If all 3 attempts fail, what happens to the flow? -> Throw to parent scope!
-            on-error: THROW
-
-            steps:
-              - name: force-error-retry-step
-                type: SpELValidatorInterceptor
-                config:
-                  condition: "#{false}"
-                  errorMessage: "Retry Trigger Error"
-                  errorStatus: "TIMEOUT" # 🚀 [Solution] Tricking the engine into "This is a timeout, so retry!"
-
+      steps:
         # ========================================================================
-        # 🚀 Outer Scope's Bypass Path
-        # Intercepts the error thrown after the inner scope exhausted 3 retries
-        # and assembles a normal response!
+        # 🛡️ Outer Scope: Defends Plan B by catching errors that propagated from retries
         # ========================================================================
-        fallback-steps:
-          - name: fallback-restore
-            type: SpELModifierInterceptor
-            config:
-              assignments:
-                - target: "body['PREFIX']"
-                  expression: "#{'RES'}"       # 💡 Safe SpEL literal string
-                - target: "body['TARGET_VAL']"
-                  expression: "#{'RTY'}"       # Mark that it arrived after retries
-                - target: "body['GLOBAL_TRX_ID']"
-                  expression: "#{payload.trxID}" # Restore original Transaction ID
+        - name: outer-fallback-scope
+          type: TRY_SCOPE
+          on-error: FALLBACK  # Execute fallback-steps if an error occurs
+
+          steps:
+            # ====================================================================
+            # 🔄 Inner Scope: Retry 3 times upon error (500ms delay between attempts)
+            # ====================================================================
+            - name: inner-retry-scope
+              type: TRY_SCOPE
+
+              retry:
+                enabled: true
+                maxRetries: 3
+                delay: 500 # Requires over 1.5 seconds if 3 retries occur
+
+              # 🚀 If all 3 attempts fail, what happens to the flow? -> Throw to parent scope!
+              on-error: THROW
+
+              steps:
+                - name: force-error-retry-step
+                  type: SpELValidatorInterceptor
+                  config:
+                    condition: "#{false}"
+                    errorMessage: "Retry Trigger Error"
+                    errorStatus: "TIMEOUT" # 🚀 [Solution] Tricking the engine into "This is a timeout, so retry!"
+
+          # ========================================================================
+          # 🚀 Outer Scope's Bypass Path
+          # Intercepts the error thrown after the inner scope exhausted 3 retries
+          # and assembles a normal response!
+          # ========================================================================
+          fallback-steps:
+            - name: fallback-restore
+              type: SpELModifierInterceptor
+              config:
+                assignments:
+                  - target: "body['PREFIX']"
+                    expression: "#{'RES'}"       # 💡 Safe SpEL literal string
+                  - target: "body['TARGET_VAL']"
+                    expression: "#{'RTY'}"       # Mark that it arrived after retries
+                  - target: "body['GLOBAL_TRX_ID']"
+                    expression: "#{payload.trxID}" # Restore original Transaction ID

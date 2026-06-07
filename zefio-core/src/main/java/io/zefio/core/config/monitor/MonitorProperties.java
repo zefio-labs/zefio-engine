@@ -2,15 +2,11 @@ package io.zefio.core.config.monitor;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * Comprehensive monitoring configuration for the engine's health and performance.
  * Defines thresholds for alerting and automatic resource scaling across different subsystems.
  */
-@Configuration
-@ConfigurationProperties(prefix = "monitor")
 @Getter
 @Setter
 public class MonitorProperties {

@@ -2,89 +2,90 @@
 # Filename: flows/flow-tryscope-basic.yaml
 # Description: TRY_SCOPE single operation and FALLBACK recovery verification flow
 # ==============================================================================
-flows:
-  - name: tryscope-basic-flow
-    label: "TRY_SCOPE Single Verification Flow"
-    options:
-      threadPool:
-        corePoolSize: 10
-        maxPoolSize: 20
-        queueCapacity: 50
+zefio:
+  flows:
+    - name: tryscope-basic-flow
+      label: "TRY_SCOPE Single Verification Flow"
+      options:
+        threadPool:
+          corePoolSize: 10
+          maxPoolSize: 20
+          queueCapacity: 50
 
-    ingress:
-      name: from-client-tryscope-51004
-      label: "HTTP Client Inbound"
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51004
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
+      ingress:
+        name: from-client-tryscope-51004
+        label: "HTTP Client Inbound"
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+        config:
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51004
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-    steps:
-      - name: basic-try-scope
-        type: TRY_SCOPE
-        label: "Single TRY_SCOPE Test"
+      steps:
+        - name: basic-try-scope
+          type: TRY_SCOPE
+          label: "Single TRY_SCOPE Test"
 
-        # 🔄 [Axis of Time] Retry configuration (Default is disabled, set to true if needed)
-        retry:
-          enabled: false   # 🚀 [Key] Explicitly control whether retries are enabled
-          maxRetries: 3
-          delay: 500
+          # 🔄 [Axis of Time] Retry configuration (Default is disabled, set to true if needed)
+          retry:
+            enabled: false   # 🚀 [Key] Explicitly control whether retries are enabled
+            maxRetries: 3
+            delay: 500
 
-        # 🛡️ [Axis of Space] Error control policy
-        # FALLBACK: Execute fallback-steps defined below upon error and restore normal flow
-        on-error: FALLBACK
+          # 🛡️ [Axis of Space] Error control policy
+          # FALLBACK: Execute fallback-steps defined below upon error and restore normal flow
+          on-error: FALLBACK
 
-        # 🏃 [Normal Path] Main business logic
-        steps:
-          # 🔥 1. Step that intentionally causes an error
-          - name: force-error-step
-            type: SpELValidatorInterceptor
-            config:
-              condition: "#{false}"
-              errorMessage: "Forced Error for TryScope Test"
-              errorStatus: "VALIDATION_FAILED"
+          # 🏃 [Normal Path] Main business logic
+          steps:
+            # 🔥 1. Step that intentionally causes an error
+            - name: force-error-step
+              type: SpELValidatorInterceptor
+              config:
+                condition: "#{false}"
+                errorMessage: "Forced Error for TryScope Test"
+                errorStatus: "VALIDATION_FAILED"
 
-        # 🚑 [Bypass Path] Plan B executed upon error (Replaces previous 'action: CONTINUE')
-        fallback-steps:
-          # 2. Log the fact that an error occurred
-          - name: fallback-log
-            type: LoggingInterceptor
-            config: { }
+          # 🚑 [Bypass Path] Plan B executed upon error (Replaces previous 'action: CONTINUE')
+          fallback-steps:
+            # 2. Log the fact that an error occurred
+            - name: fallback-log
+              type: LoggingInterceptor
+              config: { }
 
-          # ✅ 3. Restore data to a normal format so the client does not experience a failure
-          - name: fallback-restore-tryscope
-            type: SpELModifierInterceptor
-            config:
-              assignments:
-                # 💡 [Core] Use safe SpEL literal formats (#{''})
-                - target: "body['PREFIX']"
-                  expression: "#{'RES'}"
-                - target: "body['TARGET_VAL']"
-                  expression: "#{'FBK'}"
-                - target: "body['GLOBAL_TRX_ID']"
-                  expression: "#{payload.trxID}"
+            # ✅ 3. Restore data to a normal format so the client does not experience a failure
+            - name: fallback-restore-tryscope
+              type: SpELModifierInterceptor
+              config:
+                assignments:
+                  # 💡 [Core] Use safe SpEL literal formats (#{''})
+                  - target: "body['PREFIX']"
+                    expression: "#{'RES'}"
+                  - target: "body['TARGET_VAL']"
+                    expression: "#{'FBK'}"
+                  - target: "body['GLOBAL_TRX_ID']"
+                    expression: "#{payload.trxID}"
 
-    # 💥 Global Error Handler (Protects exceptions occurring outside TryScope)
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+      # 💥 Global Error Handler (Protects exceptions occurring outside TryScope)
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

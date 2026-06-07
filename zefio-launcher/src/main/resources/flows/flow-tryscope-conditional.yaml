@@ -6,103 +6,104 @@
 #   2. Perform 3 internal retries
 #   3. If final failure occurs, use SWITCH router to analyze error type and perform selective fallback
 # ==============================================================================
-flows:
-  - name: tryscope-conditional-flow
-    label: "Phase 4 Intelligent Error Control Flow"
-    options:
-      threadPool:
-        corePoolSize: 10
-    ingress:
-      name: from-client-conditional-51007
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51007
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
+zefio:
+  flows:
+    - name: tryscope-conditional-flow
+      label: "Phase 4 Intelligent Error Control Flow"
+      options:
+        threadPool:
+          corePoolSize: 10
+      ingress:
+        name: from-client-conditional-51007
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+        config:
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51007
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-    steps:
-      # ========================================================================
-      # 🛡️ Outer Scope: Intercepts all errors thrown from within and routes to Plan B (fallback-steps)
-      # ========================================================================
-      - name: outer-strategy-scope
-        type: TRY_SCOPE
-        on-error: FALLBACK  # 🚀 Catch all errors thrown from inner scopes
-
-        steps:
-          # ====================================================================
-          # 🔄 Inner Scope: Simple retry (3 repeats) and throw if abandoned
-          # ====================================================================
-          - name: inner-retry-scope
-            type: TRY_SCOPE
-            retry:
-              enabled: true
-              maxRetries: 3
-              delay: 200
-            on-error: THROW # 🚀 Throw to outer scope if all 3 attempts fail
-
-            steps:
-              - name: force-validation-error
-                type: SpELValidatorInterceptor
-                config:
-                  condition: "#{false}" # Trigger error unconditionally
-                  # 💡 SpELValidatorFilter throws FlowResultStatus.VALIDATION_FAILED on error.
-                  errorMessage: "Business Guardrail Violation"
-                  errorStatus: "VALIDATION_FAILED"
-
+      steps:
         # ========================================================================
-        # 🚀 Conditional Fallback Routing (Using SWITCH)
+        # 🛡️ Outer Scope: Intercepts all errors thrown from within and routes to Plan B (fallback-steps)
         # ========================================================================
-        fallback-steps:
-          - name: error-type-switch
-            type: SWITCH
-            cases:
-              # 💡 1. Recover only if the exception is 'VALIDATION_FAILED'!
-              - condition: "#{#exception != null and #exception.status.name() == 'VALIDATION_FAILED'}"
-                steps:
-                  - name: conditional-fallback-restore
-                    type: SpELModifierInterceptor
-                    config:
-                      assignments:
-                        - target: "body['PREFIX']"
-                          expression: "#{'RES'}"       # 💡 Safe SpEL literal format
-                        - target: "body['TARGET_VAL']"
-                          expression: "#{'CND'}"       # Mark successful conditional fallback
-                        - target: "body['GLOBAL_TRX_ID']"
-                          expression: "#{payload.trxID}"
+        - name: outer-strategy-scope
+          type: TRY_SCOPE
+          on-error: FALLBACK  # 🚀 Catch all errors thrown from inner scopes
 
-            # 💡 2. For genuine system failures (TIMEOUT, NETWORK_ERROR, etc.), do not recover, continue with error response
-            defaultSteps:
-              - name: fallback-error-propagate
-                label: "Assemble fatal error message"
-                type: SpELModifierInterceptor
-                config:
-                  assignments:
-                    # Assemble global error response without re-throwing the error
-                    - target: "body['PREFIX']"
-                      expression: "#{'ERR'}"
-                    - target: "body['ERR_REASON']"
-                      expression: "#{#exception != null ? #exception.message : 'Unknown System Error'}"
+          steps:
+            # ====================================================================
+            # 🔄 Inner Scope: Simple retry (3 repeats) and throw if abandoned
+            # ====================================================================
+            - name: inner-retry-scope
+              type: TRY_SCOPE
+              retry:
+                enabled: true
+                maxRetries: 3
+                delay: 200
+              on-error: THROW # 🚀 Throw to outer scope if all 3 attempts fail
 
-    # Global Error Handler (Safety Net)
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+              steps:
+                - name: force-validation-error
+                  type: SpELValidatorInterceptor
+                  config:
+                    condition: "#{false}" # Trigger error unconditionally
+                    # 💡 SpELValidatorFilter throws FlowResultStatus.VALIDATION_FAILED on error.
+                    errorMessage: "Business Guardrail Violation"
+                    errorStatus: "VALIDATION_FAILED"
+
+          # ========================================================================
+          # 🚀 Conditional Fallback Routing (Using SWITCH)
+          # ========================================================================
+          fallback-steps:
+            - name: error-type-switch
+              type: SWITCH
+              cases:
+                # 💡 1. Recover only if the exception is 'VALIDATION_FAILED'!
+                - condition: "#{#exception != null and #exception.status.name() == 'VALIDATION_FAILED'}"
+                  steps:
+                    - name: conditional-fallback-restore
+                      type: SpELModifierInterceptor
+                      config:
+                        assignments:
+                          - target: "body['PREFIX']"
+                            expression: "#{'RES'}"       # 💡 Safe SpEL literal format
+                          - target: "body['TARGET_VAL']"
+                            expression: "#{'CND'}"       # Mark successful conditional fallback
+                          - target: "body['GLOBAL_TRX_ID']"
+                            expression: "#{payload.trxID}"
+
+              # 💡 2. For genuine system failures (TIMEOUT, NETWORK_ERROR, etc.), do not recover, continue with error response
+              defaultSteps:
+                - name: fallback-error-propagate
+                  label: "Assemble fatal error message"
+                  type: SpELModifierInterceptor
+                  config:
+                    assignments:
+                      # Assemble global error response without re-throwing the error
+                      - target: "body['PREFIX']"
+                        expression: "#{'ERR'}"
+                      - target: "body['ERR_REASON']"
+                        expression: "#{#exception != null ? #exception.message : 'Unknown System Error'}"
+
+      # Global Error Handler (Safety Net)
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

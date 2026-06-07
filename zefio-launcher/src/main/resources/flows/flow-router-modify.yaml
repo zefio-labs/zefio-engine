@@ -2,197 +2,198 @@
 # Filename: flows/flow-router-modify.yaml
 # Description: HTTP-to-Fixed relay and external system integration error isolation flow
 # ==============================================================================
-flows:
-  - name: flow-main
-    label: "HTTP Inbound and Fixed Conversion Relay Flow"
-    options:
-      threadPool:
-        corePoolSize: 1000
-        maxPoolSize: 2000
-        queueCapacity: 2000
-        autoScaling:
-          enabled: true
-          threshold: 0.5
-          checkInterval: 5
-          scaleUpStep: 2
-          scaleDownStep: 1
-      cpuQueue:
-        capacity: 10000
-      ioQueue:
-        capacity: 5000
+zefio:
+  flows:
+    - name: flow-router-main
+      label: "HTTP Inbound and Fixed Conversion Relay Flow"
+      options:
+        threadPool:
+          corePoolSize: 1000
+          maxPoolSize: 2000
+          queueCapacity: 2000
+          autoScaling:
+            enabled: true
+            threshold: 0.5
+            checkInterval: 5
+            scaleUpStep: 2
+            scaleDownStep: 1
+        cpuQueue:
+          capacity: 10000
+        ioQueue:
+          capacity: 5000
 
-    ingress:
-      name: from-http-51001
-      label: "HTTP Source Inbound (51001)"
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51001
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
-
-    steps:
-      # 🚀 [Phase 2] Install Guardrail Filter (Top-most)
-      # [Step 1] Guardrail blockage network
-      - name: validate-payload
-        label: "Strict Input Payload Validation"
-        type: SpELValidatorInterceptor
+      ingress:
+        name: from-http-51001
+        label: "HTTP Source Inbound (51001)"
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
         config:
-          # Pass only if TARGET_VAL is strictly 'ABC', otherwise block immediately
-          condition: "#{body['TARGET_VAL'] == 'ABC'}"
-          errorMessage: "Guardrail Blocked: TARGET_VAL must be 'ABC'"
-          errorStatus: "VALIDATION_FAILED"
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51001
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-      # 🚀 [Phase 3] Data Alchemy
-      # [Step 2] Data Alchemy
-      - name: modify-fixed-body
-        label: "Offset 3 data substitution (XYZ)"
-        type: SpELModifierInterceptor
-        config:
-          assignments:
-            # [1] ABC -> XYZ
-            - target: "body['TARGET_VAL']"
-              expression: "#{'XYZ'}"
+      steps:
+        # 🚀 [Phase 2] Install Guardrail Filter (Top-most)
+        # [Step 1] Guardrail blockage network
+        - name: validate-payload
+          label: "Strict Input Payload Validation"
+          type: SpELValidatorInterceptor
+          config:
+            # Pass only if TARGET_VAL is strictly 'ABC', otherwise block immediately
+            condition: "#{body['TARGET_VAL'] == 'ABC'}"
+            errorMessage: "Guardrail Blocked: TARGET_VAL must be 'ABC'"
+            errorStatus: "VALIDATION_FAILED"
 
-            # [2] REQ -> RES (This results in RESXYZ)
-            - target: "body['PREFIX']"
-              expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
+        # 🚀 [Phase 3] Data Alchemy
+        # [Step 2] Data Alchemy
+        - name: modify-fixed-body
+          label: "Offset 3 data substitution (XYZ)"
+          type: SpELModifierInterceptor
+          config:
+            assignments:
+              # [1] ABC -> XYZ
+              - target: "body['TARGET_VAL']"
+                expression: "#{'XYZ'}"
 
-            # [3] Property Evacuation (Alchemy)
-            - target: "payload.headers['ORIGIN_TRX_ID']"
-              expression: "#{body['GLOBAL_TRX_ID']}"
+              # [2] REQ -> RES (This results in RESXYZ)
+              - target: "body['PREFIX']"
+                expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
 
-            # 🚀 [Modification] Wrap with #{} to execute as an expression!
-            - target: "body['DUMMY_HEADER']"
-              expression: "#{T(java.lang.String).format('TS:%d-ID:%s', T(java.lang.System).currentTimeMillis(), T(java.util.UUID).randomUUID().toString().substring(0,8))}"
+              # [3] Property Evacuation (Alchemy)
+              - target: "payload.headers['ORIGIN_TRX_ID']"
+                expression: "#{body['GLOBAL_TRX_ID']}"
 
-            # [5] Numeric calculation
-            - target: "payload.headers['COMPLEX_SCORE']"
-              expression: "#{100 * 1.5 + (body['TARGET_VAL'] == 'ABC' ? 50 : 10)}"
+              # 🚀 [Modification] Wrap with #{} to execute as an expression!
+              - target: "body['DUMMY_HEADER']"
+                expression: "#{T(java.lang.String).format('TS:%d-ID:%s', T(java.lang.System).currentTimeMillis(), T(java.util.UUID).randomUUID().toString().substring(0,8))}"
 
-      # 🚀 [Phase 3] The missing link: Mapping properties to HTTP response headers
-      # [Step 3] 🚀 Metadata propagation
-      - name: sync-to-http-header
-        label: "Expose internal properties in response headers"
-        type: HttpHeaderValeSetter
-        config:
-          targetType: RESPONSE # 💡 RESPONSE -> Uses PayloadHeaders.HTTP_RESPONSE_PREFIX (http.res.)
-          headerKeyValues:
-            X-ORIGIN-TRX-ID: "#{payload.headers['ORIGIN_TRX_ID']}"
-            X-COMPLEX-SCORE: "#{payload.headers['COMPLEX_SCORE']}"
-            # 💡 Bonus: Embedding current time directly into headers is now possible.
-            X-PROC-TIME: "#{T(java.lang.System).currentTimeMillis()}"
+              # [5] Numeric calculation
+              - target: "payload.headers['COMPLEX_SCORE']"
+                expression: "#{100 * 1.5 + (body['TARGET_VAL'] == 'ABC' ? 50 : 10)}"
 
-      # ========================================================================
-      # 🛡️ [Step 4] External Integration Error Isolation Scope (High-Risk Zone)
-      # ========================================================================
-      - name: external-routing-scope
-        type: TRY_SCOPE
+        # 🚀 [Phase 3] The missing link: Mapping properties to HTTP response headers
+        # [Step 3] 🚀 Metadata propagation
+        - name: sync-to-http-header
+          label: "Expose internal properties in response headers"
+          type: HttpHeaderValeSetter
+          config:
+            targetType: RESPONSE # 💡 RESPONSE -> Uses PayloadHeaders.HTTP_RESPONSE_PREFIX (http.res.)
+            headerKeyValues:
+              X-ORIGIN-TRX-ID: "#{payload.headers['ORIGIN_TRX_ID']}"
+              X-COMPLEX-SCORE: "#{payload.headers['COMPLEX_SCORE']}"
+              # 💡 Bonus: Embedding current time directly into headers is now possible.
+              X-PROC-TIME: "#{T(java.lang.System).currentTimeMillis()}"
 
-        # 🔄 [Axis of Time] Retry 3 times if target server fails
-        retry:
-          enabled: true
-          maxRetries: 3
-          delay: 500
+        # ========================================================================
+        # 🛡️ [Step 4] External Integration Error Isolation Scope (High-Risk Zone)
+        # ========================================================================
+        - name: external-routing-scope
+          type: TRY_SCOPE
 
-        # 🛡️ [Axis of Space] Restore message spec without dropping client connection on final failure
-        on-error: FALLBACK
+          # 🔄 [Axis of Time] Retry 3 times if target server fails
+          retry:
+            enabled: true
+            maxRetries: 3
+            delay: 500
 
-        # 🏃 [Normal Path] Perform dynamic routing
-        steps:
-          - name: route-to-target
-            label: "Target Dynamic Branch Router"
-            type: SpELRouterInterceptor
-            config:
-              routingRules:
-                # Shoot to XML target if original TRX_ID starts with TRX-9999
-                - name: "Route to XML"
-                  condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-9999')}"
-                  type: HttpUpstream
-                  telegram: xml-tcp-delimiter
-                  exchangePattern: RequestReply
-                  retry:
-                    enabled: false
-                  config:
-                    workThreadCount: 8
-                    connectTimeout: 3000
-                    soKeepAlive: false
-                    tcpNoDelay: true
-                    soReUseAddr: true
-                    readTimeout: 5000
-                    transactionTimeoutMillis: 10000
-                    responseMatchingType: session
-                    keepAlive: false
-                    poolMaxSize: 0
-                    onceMaxRetries: 3
-                    onceTryTimeoutMillis: 2000
-                    onceBackoffDelayMillis: 500
-                    host: localhost
-                    port: 51101
-                    requestContentType: application/xml
-                    requestEncoding: utf-8
-                    responseEncoding: utf-8
-                # Shoot to JSON target if original TRX_ID starts with TRX-JSON
-                - name: "Route to JSON"
-                  condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-JSON')}"
-                  type: HttpUpstream
-                  telegram: json-standard
-                  exchangePattern: RequestReply
-                  retry:
-                    enabled: false
-                  config:
-                    workThreadCount: 8
-                    connectTimeout: 3000
-                    soKeepAlive: false
-                    tcpNoDelay: true
-                    soReUseAddr: true
-                    readTimeout: 5000
-                    transactionTimeoutMillis: 10000
-                    responseMatchingType: session
-                    keepAlive: false
-                    poolMaxSize: 0
-                    onceMaxRetries: 3
-                    onceTryTimeoutMillis: 2000
-                    onceBackoffDelayMillis: 500
-                    host: localhost
-                    port: 51101
-                    requestContentType: application/json
-                    requestEncoding: utf-8
-                    responseEncoding: utf-8
+          # 🛡️ [Axis of Space] Restore message spec without dropping client connection on final failure
+          on-error: FALLBACK
 
-        # 🚑 [Bypass Path] Operates on routing failure or target server timeout
-        fallback-steps:
-          - name: build-error-response
-            label: "Assemble message on external integration failure"
-            type: SpELModifierInterceptor
-            config:
-              assignments:
-                # Mark PREFIX as ERR, and insert error message into DUMMY_HEADER area (Healing process)
-                - target: "body['PREFIX']"
-                  expression: "#{'ERR'}"
-                - target: "body['DUMMY_HEADER']"
-                  expression: "'Call Failed: ' + (#exception != null ? #exception.message : 'Unknown')"
-                - target: "body['GLOBAL_TRX_ID']"
-                  expression: "#{payload.trxID}"
+          # 🏃 [Normal Path] Perform dynamic routing
+          steps:
+            - name: route-to-target
+              label: "Target Dynamic Branch Router"
+              type: SpELRouterInterceptor
+              config:
+                routingRules:
+                  # Shoot to XML target if original TRX_ID starts with TRX-9999
+                  - name: "Route to XML"
+                    condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-9999')}"
+                    type: HttpUpstream
+                    telegram: xml-tcp-delimiter
+                    exchangePattern: RequestReply
+                    retry:
+                      enabled: false
+                    config:
+                      workThreadCount: 8
+                      connectTimeout: 3000
+                      soKeepAlive: false
+                      tcpNoDelay: true
+                      soReUseAddr: true
+                      readTimeout: 5000
+                      transactionTimeoutMillis: 10000
+                      responseMatchingType: session
+                      keepAlive: false
+                      poolMaxSize: 0
+                      onceMaxRetries: 3
+                      onceTryTimeoutMillis: 2000
+                      onceBackoffDelayMillis: 500
+                      host: localhost
+                      port: 51101
+                      requestContentType: application/xml
+                      requestEncoding: utf-8
+                      responseEncoding: utf-8
+                  # Shoot to JSON target if original TRX_ID starts with TRX-JSON
+                  - name: "Route to JSON"
+                    condition: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-JSON')}"
+                    type: HttpUpstream
+                    telegram: json-standard
+                    exchangePattern: RequestReply
+                    retry:
+                      enabled: false
+                    config:
+                      workThreadCount: 8
+                      connectTimeout: 3000
+                      soKeepAlive: false
+                      tcpNoDelay: true
+                      soReUseAddr: true
+                      readTimeout: 5000
+                      transactionTimeoutMillis: 10000
+                      responseMatchingType: session
+                      keepAlive: false
+                      poolMaxSize: 0
+                      onceMaxRetries: 3
+                      onceTryTimeoutMillis: 2000
+                      onceBackoffDelayMillis: 500
+                      host: localhost
+                      port: 51101
+                      requestContentType: application/json
+                      requestEncoding: utf-8
+                      responseEncoding: utf-8
 
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+          # 🚑 [Bypass Path] Operates on routing failure or target server timeout
+          fallback-steps:
+            - name: build-error-response
+              label: "Assemble message on external integration failure"
+              type: SpELModifierInterceptor
+              config:
+                assignments:
+                  # Mark PREFIX as ERR, and insert error message into DUMMY_HEADER area (Healing process)
+                  - target: "body['PREFIX']"
+                    expression: "#{'ERR'}"
+                  - target: "body['DUMMY_HEADER']"
+                    expression: "'Call Failed: ' + (#exception != null ? #exception.message : 'Unknown')"
+                  - target: "body['GLOBAL_TRX_ID']"
+                    expression: "#{payload.trxID}"
+
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

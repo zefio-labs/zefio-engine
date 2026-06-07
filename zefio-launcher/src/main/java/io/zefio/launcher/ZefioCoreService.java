@@ -2,7 +2,7 @@ package io.zefio.launcher;
 
 import io.zefio.core.common.exception.FlowResultStatus;
 import io.zefio.core.common.util.CommonUtils;
-import io.zefio.core.config.system.SystemProperties;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.PipelineService;
 import io.zefio.core.beans.FlowSettingsBean;
 import org.apache.commons.lang3.StringUtils;
@@ -30,7 +30,7 @@ public class ZefioCoreService implements io.zefio.core.ZefioCoreService, Disposa
     @Autowired
     private FlowSettingsBean flowSettings;
     @Autowired
-    private SystemProperties systemProperties;
+    private ZefioEngineProperties zefioEngineProperties;
     @Autowired
     private Environment environment;
     @Autowired
@@ -41,7 +41,7 @@ public class ZefioCoreService implements io.zefio.core.ZefioCoreService, Disposa
 
     @Override
     public void execute() {
-        if (this.systemProperties.isHotdeploy()) {
+        if (this.zefioEngineProperties.getGlobalOptions().isHotDeploy()) {
             this.watchDogExecutor = Executors.newSingleThreadExecutor(CommonUtils.getThreadFactory("file-watch-"));
             try {
                 this.watchDogExecutor.submit(new ConfigurationDirectoryWatcher(environment, this, contextRefresher));

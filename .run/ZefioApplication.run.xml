@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ZefioApplication" type="Application" factoryName="Application" nameIsGenerated="true">
+    <option name="MAIN_CLASS_NAME" value="io.zefio.launcher.ZefioApplication" />
+    <module name="zefio-launcher" />
+    <option name="VM_PARAMETERS" value="-Dspring.profiles.active=prd -Dapplication.version=1.0 -Dspring.config.location=classpath:/application.yaml -Djava.net.preferIPv4Stack=true -Dfile.encoding=utf-8" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="io.zefio.launcher.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -4,8 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.beans.DynamicSchemaLoader;
+import io.zefio.core.beans.FlowSettingsBean;
 import io.zefio.core.common.base.PluginMeta;
-import io.zefio.core.config.flow.FlowSettings;
 import io.zefio.core.schema.PluginSchemaExtractor;
 import io.zefio.core.telemetry.cp.ZefioCpRedisPublisher;
 import lombok.extern.slf4j.Slf4j;
@@ -42,8 +42,8 @@ public class ConfigApi {
             String yamlContent = payload.get("yaml");
             String targetGroup = payload.getOrDefault("targetGroup", "main");
 
-            // 1. Fail-Fast Validation: Ensure the YAML conforms to FlowSettings DTO
-            yamlMapper.readValue(yamlContent, FlowSettings.class);
+            // 1. Fail-Fast Validation: Ensure the YAML conforms to DeploymentPayload DTO
+            yamlMapper.readValue(yamlContent, FlowSettingsBean.DeploymentPayload.class);
 
             // 2. Broadcast to all DP nodes via Redis
             log.info("[ConfigApi] Structural validation successful. Broadcasting cluster update payload to: {}", targetGroup);

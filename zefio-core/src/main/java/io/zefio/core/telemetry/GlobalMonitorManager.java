@@ -1,5 +1,6 @@
 package io.zefio.core.telemetry;
 
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.config.monitor.MonitorProperties;
 import io.zefio.core.telemetry.history.InMemoryHistoryManager;
 import io.zefio.core.telemetry.jvm.JvmMonitorLogger;
@@ -8,12 +9,12 @@ import io.zefio.core.telemetry.provider.IMonitorPoolProvider;
 import io.zefio.core.telemetry.stat.StatLogger;
 import io.zefio.core.telemetry.thread.ThreadPoolMonitorLogger;
 import io.zefio.core.telemetry.thread.ThreadPoolStateTracker;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,16 +23,16 @@ import org.springframework.stereotype.Component;
  * such as ThreadPool, JVM, and Logging monitors.
  */
 @Component
+@RequiredArgsConstructor
 public class GlobalMonitorManager implements InitializingBean, DisposableBean {
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
-    @Autowired
-    private io.micrometer.core.instrument.MeterRegistry meterRegistry;
-    @Autowired
-    private MonitorProperties monitorProps;
-    @Autowired
-    private InMemoryHistoryManager historyManager;
+    // Immutable dependencies managed via constructor injection
+    private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    private final ZefioEngineProperties zefioEngineProperties;
+    private final InMemoryHistoryManager historyManager;
 
+    // Runtime logger state contexts (Non-final due to dynamic reallocation)
     private ThreadPoolMonitorLogger sharedIoPoolLogger;
     private JvmMonitorLogger jvmLogger;
     private LoggingMonitorLogger loggingLogger;
@@ -59,6 +60,9 @@ public class GlobalMonitorManager implements InitializingBean, DisposableBean {
      */
     public void startGlobalMonitoring(IMonitorPoolProvider poolProvider) {
         stopAll();
+
+        // Source target monitor settings block directly from the unified properties gateway
+        MonitorProperties monitorProps = zefioEngineProperties.getMonitor();
 
         MonitorInitContext.MonitorInitContextBuilder monitorInitContextBuilder = MonitorInitContext.builder()
                 .sharedScheduler(poolProvider.getSharedScheduledPool())
@@ -95,6 +99,9 @@ public class GlobalMonitorManager implements InitializingBean, DisposableBean {
      */
     public void printConfigurationLog() {
         log.info("{}", StringUtils.center(" MONITORING SETTINGS APPLIED ", 70, "■"));
+
+        // Source target monitor settings block directly from the unified properties gateway
+        MonitorProperties monitorProps = zefioEngineProperties.getMonitor();
 
         // 1. General Logging Options
         log.info("  [Logging Options]");

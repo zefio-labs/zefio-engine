@@ -2,143 +2,144 @@
 # Filename: globals/telegrams.yaml
 # Description: Global telegram layout and correlation logic using SpEL
 # ==============================================================================
-telegrams:
-  # ========================================================================
-  # 🧱 [Group 1] Fixed-Length Telegrams
-  # Migrated from Offset-based to Layout-based + SpEL correlation
-  # ========================================================================
+zefio:
+  telegrams:
+    # ========================================================================
+    # 🧱 [Group 1] Fixed-Length Telegrams
+    # Migrated from Offset-based to Layout-based + SpEL correlation
+    # ========================================================================
 
-  # [Case 1] Standard Financial Sector (8-byte header + Offset-based ID extraction)
-  fixed-standard:
-    type: Fixed
-    config:
-      encodingIgnore: true
-      framing:
-        type: Length
-        lengthDataSize: 8
-        lengthDataInclude: false
-        lengthDataUpdate: true
-      correlation:
-        type: SpEL
-        expression: "#{body['GLOBAL_TRX_ID']}"
-      layout:
-        - { name: "DUMMY_HEADER",  length: 64 }
-        - { name: "GLOBAL_TRX_ID", length: 32 }
-        # 🚀 [Addition] Preserve "all" remaining data after the first 96 bytes as VAR_DATA!
-        - { name: "VAR_DATA", length: -1 }
+    # [Case 1] Standard Financial Sector (8-byte header + Offset-based ID extraction)
+    fixed-standard:
+      type: Fixed
+      config:
+        encodingIgnore: true
+        framing:
+          type: Length
+          lengthDataSize: 8
+          lengthDataInclude: false
+          lengthDataUpdate: true
+        correlation:
+          type: SpEL
+          expression: "#{body['GLOBAL_TRX_ID']}"
+        layout:
+          - { name: "DUMMY_HEADER",  length: 64 }
+          - { name: "GLOBAL_TRX_ID", length: 32 }
+          # 🚀 [Addition] Preserve "all" remaining data after the first 96 bytes as VAR_DATA!
+          - { name: "VAR_DATA", length: -1 }
 
-  # [Case 2] External/Network Interlink (Reads total body as 1 unit without framing)
-  fixed-eof-sync:
-    type: Fixed
-    config:
-      encodingIgnore: true
-      framing:
-        type: EOF
-      correlation:
-        type: SpEL
-        expression: "#{body['SYSTEM_ID']}"
-      layout:
-        - { name: "SYSTEM_ID", length: 20 }
+    # [Case 2] External/Network Interlink (Reads total body as 1 unit without framing)
+    fixed-eof-sync:
+      type: Fixed
+      config:
+        encodingIgnore: true
+        framing:
+          type: EOF
+        correlation:
+          type: SpEL
+          expression: "#{body['SYSTEM_ID']}"
+        layout:
+          - { name: "SYSTEM_ID", length: 20 }
 
-  # ========================================================================
-  # 📄 [Group 2] JSON Telegrams
-  # Migrated from JsonPath to safe [''] SpEL syntax
-  # ========================================================================
+    # ========================================================================
+    # 📄 [Group 2] JSON Telegrams
+    # Migrated from JsonPath to safe [''] SpEL syntax
+    # ========================================================================
 
-  # 🚀 [New] Standard JSON for HTTP (for high-complexity composite flows)
-  json-standard:
-    type: JSON
-    config:
-      encodingIgnore: false
-      framing:
-        type: EOF
-      correlation:
-        type: SpEL
-        # 💡 [Anti-Crash] Use existing trxId if available, otherwise generate UUID on-the-fly!
-        expression: "#{body['header'] != null && body['header']['trxId'] != null ? body['header']['trxId'] : T(java.util.UUID).randomUUID().toString().replace('-', '')}"
+    # 🚀 [New] Standard JSON for HTTP (for high-complexity composite flows)
+    json-standard:
+      type: JSON
+      config:
+        encodingIgnore: false
+        framing:
+          type: EOF
+        correlation:
+          type: SpEL
+          # 💡 [Anti-Crash] Use existing trxId if available, otherwise generate UUID on-the-fly!
+          expression: "#{body['header'] != null && body['header']['trxId'] != null ? body['header']['trxId'] : T(java.util.UUID).randomUUID().toString().replace('-', '')}"
 
-  # [Case 1] Modern RESTful API (Dedicated to HTTP)
-  json-rest-api:
-    type: JSON
-    config:
-      encodingIgnore: false
-      framing:
-        type: EOF
-      correlation:
-        type: SpEL
-        # 💡 Safe navigation: Prevent NullPointerException if commonHeader is missing
-        expression: "#{body['commonHeader'] != null ? body['commonHeader']['globalTrxId'] : null}"
+    # [Case 1] Modern RESTful API (Dedicated to HTTP)
+    json-rest-api:
+      type: JSON
+      config:
+        encodingIgnore: false
+        framing:
+          type: EOF
+        correlation:
+          type: SpEL
+          # 💡 Safe navigation: Prevent NullPointerException if commonHeader is missing
+          expression: "#{body['commonHeader'] != null ? body['commonHeader']['globalTrxId'] : null}"
 
-  # [Case 2] Variant TCP JSON (4-byte length header prefix)
-  json-tcp-length:
-    type: JSON
-    config:
-      encodingIgnore: false
-      framing:
-        type: Length
-        lengthDataSize: 4
-        lengthDataUpdate: true
-      correlation:
-        type: SpEL
-        expression: "#{body['guid']}"
+    # [Case 2] Variant TCP JSON (4-byte length header prefix)
+    json-tcp-length:
+      type: JSON
+      config:
+        encodingIgnore: false
+        framing:
+          type: Length
+          lengthDataSize: 4
+          lengthDataUpdate: true
+        correlation:
+          type: SpEL
+          expression: "#{body['guid']}"
 
-  # [Case 3] IoT/Log Stream (Infinite stream of JSONs delimited by \n)
-  json-stream-newline:
-    type: JSON
-    config:
-      encodingIgnore: false
-      framing:
-        type: Delimiter
-        delimiter: "\n"
-      correlation:
-        type: SpEL
-        expression: "#{body['traceId']}"
+    # [Case 3] IoT/Log Stream (Infinite stream of JSONs delimited by \n)
+    json-stream-newline:
+      type: JSON
+      config:
+        encodingIgnore: false
+        framing:
+          type: Delimiter
+          delimiter: "\n"
+        correlation:
+          type: SpEL
+          expression: "#{body['traceId']}"
 
-  # ========================================================================
-  # 📝 [Group 3] XML Telegrams
-  # Migrated from XPath to Map-based SpEL navigation (via Jackson XmlMapper)
-  # ========================================================================
+    # ========================================================================
+    # 📝 [Group 3] XML Telegrams
+    # Migrated from XPath to Map-based SpEL navigation (via Jackson XmlMapper)
+    # ========================================================================
 
-  # [Case 1] SOAP/Enterprise XML Interlink
-  xml-standard-http:
-    type: XML
-    config:
-      encodingIgnore: false
-      framing:
-        type: EOF
-      correlation:
-        type: SpEL
-        expression: "#{body['Header'] != null ? body['Header']['GlobalId'] : null}"
+    # [Case 1] SOAP/Enterprise XML Interlink
+    xml-standard-http:
+      type: XML
+      config:
+        encodingIgnore: false
+        framing:
+          type: EOF
+        correlation:
+          type: SpEL
+          expression: "#{body['Header'] != null ? body['Header']['GlobalId'] : null}"
 
-  # [Case 2] TCP XML (Recognizes </MSG> or symbol @@ as termination point)
-  xml-tcp-delimiter:
-    type: XML
-    config:
-      encodingIgnore: false
-      framing:
-        type: Delimiter
-        delimiter: "</MSG>"
-      correlation:
-        type: SpEL
-        expression: "#{body['Body'] != null ? body['Body']['TrxNo'] : null}"
+    # [Case 2] TCP XML (Recognizes </MSG> or symbol @@ as termination point)
+    xml-tcp-delimiter:
+      type: XML
+      config:
+        encodingIgnore: false
+        framing:
+          type: Delimiter
+          delimiter: "</MSG>"
+        correlation:
+          type: SpEL
+          expression: "#{body['Body'] != null ? body['Body']['TrxNo'] : null}"
 
-  # ========================================================================
-  # 🧪 [TEST] Special telegram for unit/E2E verification
-  # ========================================================================
-  fixed-http-req:
-    type: Fixed
-    config:
-      encodingIgnore: true
-      framing:
-        type: EOF
-        lengthDataSize: 8
-        lengthDataInclude: false
-        lengthDataUpdate: false
-      correlation:
-        type: SpEL
-        expression: "#{body['GLOBAL_TRX_ID']}"
-      layout:
-        - { name: "PREFIX",        length: 3 }
-        - { name: "TARGET_VAL",    length: 3 } # Offset 3 point (Target for 'XYZ' transformation)
-        - { name: "DUMMY_HEADER",  length: 58 }
-        - { name: "GLOBAL_TRX_ID", length: 32 } # Offset 64 point (SpEL correlation target)
+    # ========================================================================
+    # 🧪 [TEST] Special telegram for unit/E2E verification
+    # ========================================================================
+    fixed-http-req:
+      type: Fixed
+      config:
+        encodingIgnore: true
+        framing:
+          type: EOF
+          lengthDataSize: 8
+          lengthDataInclude: false
+          lengthDataUpdate: false
+        correlation:
+          type: SpEL
+          expression: "#{body['GLOBAL_TRX_ID']}"
+        layout:
+          - { name: "PREFIX",        length: 3 }
+          - { name: "TARGET_VAL",    length: 3 } # Offset 3 point (Target for 'XYZ' transformation)
+          - { name: "DUMMY_HEADER",  length: 58 }
+          - { name: "GLOBAL_TRX_ID", length: 32 } # Offset 64 point (SpEL correlation target)

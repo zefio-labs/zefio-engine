@@ -1,13 +1,13 @@
 package io.zefio.core.telemetry;
 
-import io.zefio.core.config.monitor.MonitorProperties;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.telemetry.provider.IMetricsResettable;
 import io.zefio.core.telemetry.registry.MonitorRegistry;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.context.scope.refresh.RefreshScopeRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
@@ -22,17 +22,14 @@ import java.util.concurrent.ScheduledFuture;
  * Automatically updates schedules when configuration is refreshed (Hot-Deploy).
  */
 @Component
+@RequiredArgsConstructor
 public class MetricsResetScheduler implements InitializingBean, DisposableBean {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    @Autowired
-    private GlobalMonitorManager globalMonitorManager;
-
-    @Autowired
-    private MonitorProperties monitorProperties;
-
-    @Autowired
-    private TaskScheduler taskScheduler;
+    // Immutable structural components coupled via single constructor injection
+    private final GlobalMonitorManager globalMonitorManager;
+    private final ZefioEngineProperties zefioEngineProperties;
+    private final TaskScheduler taskScheduler;
 
     private ScheduledFuture<?> scheduledTask;
 
@@ -51,8 +48,9 @@ public class MetricsResetScheduler implements InitializingBean, DisposableBean {
     }
 
     private synchronized void scheduleTask(String reason) {
-        String cron = monitorProperties.getMetricsReset().getCron();
-        String zone = monitorProperties.getMetricsReset().getZone();
+        // Navigate down the unified engine configurations hierarchy to extract cron metadata safely
+        String cron = zefioEngineProperties.getMonitor().getMetricsReset().getCron();
+        String zone = zefioEngineProperties.getMonitor().getMetricsReset().getZone();
 
         log.info("[Scheduler] [{}] Registering task. Cron: [{}] Zone: [{}]", reason, cron, zone);
 

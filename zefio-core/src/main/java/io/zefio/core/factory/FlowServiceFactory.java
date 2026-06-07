@@ -8,9 +8,9 @@ import io.zefio.core.PipelineService;
 import io.zefio.core.beans.FlowSyncBridge;
 import io.zefio.core.common.base.ScopeType;
 import io.zefio.core.common.exception.FlowException;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.config.flow.*;
 import io.zefio.core.config.global.GlobalOptionsProperties;
-import io.zefio.core.config.monitor.MonitorProperties;
 import io.zefio.core.engine.flow.FlowInitContext;
 import io.zefio.core.engine.flow.FlowService;
 import io.zefio.core.engine.policy.ExceptionPolicyManager;
@@ -18,10 +18,10 @@ import io.zefio.core.engine.pool.SharedPools;
 import io.zefio.core.engine.processor.*;
 import io.zefio.core.engine.processor.dto.SwitchBranch;
 import io.zefio.core.payload.Payload;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -33,21 +33,16 @@ import java.util.Map;
  * Purely focused on pipeline generation. Profile mixing is completely deprecated.
  */
 @Component
+@RequiredArgsConstructor
 public class FlowServiceFactory {
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
-    @Autowired
-    private PluginFactory pluginFactory;
-    @Autowired
-    private MeterRegistry meterRegistry;
-    @Autowired
-    private GlobalOptionsProperties globalOptionsProperties;
-    @Autowired
-    private MonitorProperties monitorProperties;
-    @Autowired
-    private ExceptionPolicyManager policyManager;
-    @Autowired
-    private FlowSyncBridge flowSyncBridge;
+    // Consolidated and immutable core engine system components
+    private final PluginFactory pluginFactory;
+    private final MeterRegistry meterRegistry;
+    private final ZefioEngineProperties zefioEngineProperties;
+    private final ExceptionPolicyManager policyManager;
+    private final FlowSyncBridge flowSyncBridge;
 
     /**
      * Builds the executable pipeline service directly using the fully pre-flattened flow model.
@@ -56,7 +51,6 @@ public class FlowServiceFactory {
         try {
             String ingressTelegramKey = f.getIngress().getTelegram();
 
-            // 💡 Profile merging parameters completely removed
             List<Processor> rootPipeline = buildPipeline(f.getSteps(), f, sharedPools);
 
             PluginContext ingressCtx = buildContext(f, ingressTelegramKey, sharedPools)
@@ -86,7 +80,8 @@ public class FlowServiceFactory {
                     .ingress(ingress).rootPipeline(rootPipeline)
                     .errorPipelines(errorPipelines)
                     .policyManager(policyManager).sharedPools(sharedPools)
-                    .meterRegistry(meterRegistry).monitorProperties(monitorProperties)
+                    .meterRegistry(meterRegistry)
+                    .monitorProperties(zefioEngineProperties.getMonitor()) // Sourced from the unified configuration bean
                     .build();
 
             PipelineService service = new FlowService(ctx);
@@ -100,7 +95,8 @@ public class FlowServiceFactory {
     }
 
     private RetryPolicy<Payload> buildNodeRetryPolicy(GlobalOptionsProperties.DefaultRetry stepRetry) {
-        GlobalOptionsProperties.DefaultRetry global = globalOptionsProperties.getDefaultRetry();
+        // Sourced global configuration settings graph from the unified root engine properties
+        GlobalOptionsProperties.DefaultRetry global = zefioEngineProperties.getGlobalOptions().getDefaultRetry();
 
         boolean enabled = (stepRetry != null && stepRetry.getEnabled() != null) ? stepRetry.getEnabled() : global.getEnabled();
         int maxRetries = (stepRetry != null && stepRetry.getMaxRetries() != null) ? stepRetry.getMaxRetries() : global.getMaxRetries();

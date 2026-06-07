@@ -17,49 +17,43 @@ management:
       path-mapping:
         health: health
 
-zefio:
-  # ==========================================
-  # Node Identification
-  # ==========================================
-  node:
-    id: ${ZEFIO_NODE_ID:DP-02}
-    group: ${ZEFIO_NODE_GROUP:main}
-
-  # ==========================================
-  # Control Plane (CP) Telemetry Configuration
-  # ==========================================
-  cp:
-    enabled: true
-    api-url: http://127.0.0.1:3000
-    redis:
-      url: redis://e000.bond:6379/0
-    metrics:
-      push-interval-ms: 3000
-
 spring:
   main:
     banner-mode: log
   config:
     import:
-      - classpath:globals/global-options.yaml
-      - classpath:globals/monitor.yaml
-      - classpath:globals/system.yaml
+      - classpath:globals/zefio-platform.yaml
+      - classpath:globals/telegrams.yaml
+#      - classpath:flows/flow-hotswap.yaml
 
-# Explicit Zefio Domain Imports
-imports:
-  - "classpath:globals/global-options.yaml"
-  - "classpath:globals/monitor.yaml"
-  - "classpath:globals/system.yaml"
-  - "classpath:globals/telegrams.yaml"
+# ==============================================================================
+# Zefio Unified Namespace Root
+# ==============================================================================
+zefio:
+  node:
+    id: ${ZEFIO_NODE_ID:DP-02}
+    group: ${ZEFIO_NODE_GROUP:main}
 
-# Commented flows (Activated manually or via environment-specific profiles)
-#  - "classpath:flows/flow-extreme-composite.yaml"
-#  - "classpath:flows/flow-router-modify.yaml"
-#  - "classpath:flows/flow-scatter-basic.yaml"
-#  - "classpath:flows/flow-spel-loopback.yaml"
-#  - "classpath:flows/flow-switch-orchestration.yaml"
-#  - "classpath:flows/flow-tryscope-basic.yaml"
-#  - "classpath:flows/flow-tryscope-conditional.yaml"
-#  - "classpath:flows/flow-tryscope-retry.yaml"
-#  - "classpath:flows/flow-vm-modify.yaml"
-  - "classpath:flows/flow-hotswap.yaml"
+  cp:
+    enabled: true
+    redis:
+      url: redis://e000.bond:6379/0
+    metrics:
+      push-interval-ms: 3000
+
+  # Explicit Zefio Domain Imports moved inside the root namespace
+  imports:
+    - "classpath:globals/zefio-platform.yaml"
+    - "classpath:globals/telegrams.yaml"
+
+  # Commented flows (Activated manually or via environment-specific profiles)
+#    - "classpath:flows/flow-extreme-composite.yaml"
+#    - "classpath:flows/flow-router-modify.yaml"
+#    - "classpath:flows/flow-scatter-basic.yaml"
+#    - "classpath:flows/flow-spel-loopback.yaml"
+#    - "classpath:flows/flow-switch-orchestration.yaml"
+#    - "classpath:flows/flow-tryscope-basic.yaml"
+#    - "classpath:flows/flow-tryscope-conditional.yaml"
+#    - "classpath:flows/flow-tryscope-retry.yaml"
+#    - "classpath:flows/flow-vm-modify.yaml"
+#    - "classpath:flows/flow-hotswap.yaml"

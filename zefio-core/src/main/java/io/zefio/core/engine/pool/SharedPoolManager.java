@@ -3,8 +3,8 @@ package io.zefio.core.engine.pool;
 import io.zefio.core.common.exception.FlowException;
 import io.zefio.core.common.exception.FlowResultStatus;
 import io.zefio.core.common.util.DisposableExecutor;
-import io.zefio.core.config.system.SharedThreadPoolProperties;
-import io.zefio.core.config.system.SystemProperties;
+import io.zefio.core.config.ZefioEngineProperties;
+import io.zefio.core.config.threadpool.SharedThreadPoolProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,14 +28,14 @@ public class SharedPoolManager {
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
     @Autowired
-    private SystemProperties systemProperties;
+    private ZefioEngineProperties zefioEngineProperties;
 
     private DisposableExecutor sharedScheduledPoolWrapper;
     private DisposableExecutor sharedIoPoolWrapper;
     private DisposableExecutor sharedFailsafePoolWrapper;
 
     public SharedPools setupPools() {
-        SharedThreadPoolProperties poolProps = systemProperties.getThreadPools();
+        SharedThreadPoolProperties poolProps = zefioEngineProperties.getThreadPools();
 
         // ---------------------------------------------------------
         // 1. Shared Scheduler Pool (For monitoring and system control)

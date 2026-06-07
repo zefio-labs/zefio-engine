@@ -1,4 +1,4 @@
-package io.zefio.core.config.system;
+package io.zefio.core.config.threadpool;
 
 import lombok.Data;
 
@@ -14,7 +14,6 @@ public class SharedThreadPoolProperties {
     private ThreadPoolSetting io = new ThreadPoolSetting();
 
     public SharedThreadPoolProperties() {
-        // Defensive Programming: Initialize absolute safety nets in case YAML config is missing.
 
         // 1. Shared IO Pool: Heavy-duty pool for primary non-blocking I/O operations.
         this.io.setFixedPoolSize(200);

@@ -4,17 +4,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import io.zefio.core.beans.ApplicationContextProvider;
 import io.zefio.core.beans.FlowSettingsBean;
-import io.zefio.core.schema.DslConfigurationLoader;
 import io.zefio.core.config.flow.ErrorHandlerConfiguration;
 import io.zefio.core.config.flow.FlowConfiguration;
-import io.zefio.core.config.flow.FlowSettings;
 import io.zefio.core.config.flow.StepConfiguration;
+import io.zefio.core.schema.DslConfigurationLoader;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeansException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -48,31 +45,14 @@ public class FlowConfigUtils {
     }
 
     /**
-     * Returns the StepConfiguration object based on the given name directly from running flow scopes.
-     * Profile template interpolation is completely deprecated as configurations are flattened.
-     */
-    public static StepConfiguration getStepConfigByName(String name) throws Exception {
-        if (StringUtils.isBlank(name)) return null;
-
-        try {
-            FlowSettingsBean bean = ApplicationContextProvider.getApplicationContext().getBean(FlowSettingsBean.class);
-            FlowSettings settings = bean.getSettings();
-            return searchStepInSettings(settings, name);
-        } catch (BeansException | NullPointerException e) {
-            log.debug("Spring Context not ready. Attempting DSL fallback load for name: {}", name);
-            return findStepFromDslFallback(name);
-        }
-    }
-
-    /**
-     * Internal logic to search for a step definition within explicit pre-flattened FlowSettings.
+     * Internal logic to search for a step definition within explicit pre-flattened flow lists.
      * Searches only through running ingress gateways and active pipeline step paths.
      */
-    private static StepConfiguration searchStepInSettings(FlowSettings settings, String name) {
-        if (settings == null || settings.getFlows() == null) return null;
+    private static StepConfiguration searchStepInFlows(List<FlowConfiguration> flows, String name) {
+        if (flows == null) return null;
 
         // Search exclusively inside Ingress and Pipeline Step Hierarchies
-        for (FlowConfiguration flow : settings.getFlows()) {
+        for (FlowConfiguration flow : flows) {
             if (flow.getIngress() != null && name.equals(flow.getIngress().getName())) {
                 return convertToStepConfig(flow.getIngress().getName(), flow.getIngress().getType(), flow.getIngress().getConfig());
             }
@@ -114,12 +94,20 @@ public class FlowConfigUtils {
     /**
      * Fallback logic to find steps via DSL Configuration Loader if Spring Context is unavailable.
      */
+    @SuppressWarnings("unchecked")
     private static StepConfiguration findStepFromDslFallback(String name) {
         try {
             DslConfigurationLoader loader = new DslConfigurationLoader();
             Map<String, Object> mergedYamlMap = loader.loadAndMerge(getMainConfigPath());
-            FlowSettings tempSettings = mapper.convertValue(mergedYamlMap, FlowSettings.class);
-            return searchStepInSettings(tempSettings, name);
+
+            // Extract nested 'zefio' block to maintain consistency with the structural setup
+            Map<String, Object> zefioBlock = (Map<String, Object>) mergedYamlMap.get("zefio");
+            if (zefioBlock == null) {
+                zefioBlock = mergedYamlMap;
+            }
+
+            FlowSettingsBean.DeploymentPayload tempPayload = mapper.convertValue(zefioBlock, FlowSettingsBean.DeploymentPayload.class);
+            return searchStepInFlows(tempPayload.getFlows(), name);
         } catch (Exception ex) {
             log.error("Failed to load YAML via DslConfigurationLoader fallback.", ex);
             return null;

@@ -2,146 +2,147 @@
 # Filename: flows/flow-spel-loopback.yaml
 # Description: SpEL-based Loopback self-verification flow (integrated Send/Receive)
 # ==============================================================================
-flows:
-  # ============================================================================
-  # 🚀 [Flow A] Sender: The SpEL Alchemist (Error Isolation and Intelligent Recovery)
-  # ============================================================================
-  - name: loopback-sender-flow
-    ingress:
-      name: client-in-51008
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51008
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
-
-    steps:
-      - name: strategy-scope
-        type: TRY_SCOPE
-
-        # 🔄 [Axis of Time] Retry twice (set short as it is a self-call)
-        retry:
-          enabled: true
-          maxRetries: 2
-          delay: 500
-
-        # 🛡️ [Axis of Space] Secure bypass path on error
-        on-error: FALLBACK
-
-        steps:
-          - name: call-internal-target
-            type: HttpUpstream
-            telegram: fixed-http-req
-            exchangePattern: RequestReply
-            config:
-              workThreadCount: 8
-              connectTimeout: 3000
-              soKeepAlive: false
-              tcpNoDelay: true
-              soReUseAddr: true
-              readTimeout: 5000
-              transactionTimeoutMillis: 10000
-              responseMatchingType: session
-              keepAlive: false
-              poolMaxSize: 0
-              onceMaxRetries: 3
-              onceTryTimeoutMillis: 2000
-              onceBackoffDelayMillis: 500
-              host: "localhost"
-              port: 52008 # 🎯 Targets Flow B in the same process
-              requestHttpMethod: POST
-              requestPath: "/base/test/#{body.TARGET_VAL}"
-              requestHeaderKeyValues:
-                X-SERVER-NAME: "#{T(java.net.InetAddress).localHost.hostName}"
-                X-GEN-DATE: "#{T(java.time.LocalDate).now().toString()}"
-                X-TID: "#{payload.trxID}"
-
-        # 🚑 [Bypass Path] Analyze error types for selective recovery
-        fallback-steps:
-          - name: fallback-router
-            type: SWITCH
-            cases:
-              # 💡 [Phase 4 Evolution] Mark as success only if it is a REMOTE_CLIENT/SERVER error
-              - condition: "#{#exception != null and #exception.status.name().startsWith('REMOTE_')}"
-                steps:
-                  - name: fallback-success-mark
-                    type: SpELModifierInterceptor
-                    config:
-                      assignments:
-                        - target: "body['PREFIX']"
-                          expression: "#{'RES'}"
-                        - target: "body['DUMMY_HEADER']"
-                          expression: "#{'Resolved via Conditional Fallback'}"
-
-            # 💡 Other errors (TIMEOUT, etc.) are not recovered and returned as error responses (Default)
-            defaultSteps:
-              - name: fatal-error-log
-                type: LoggingInterceptor
-                config: { message: "Critical System Error in Loopback: #{#exception.message}" }
-
-  # ============================================================================
-  # 📥 [Flow B] Receiver: Data Verification and Responder (Virtual Target)
-  # ============================================================================
-  - name: temp-outbound-flow
-    label: "Virtual target for inbound reception"
-    ingress:
-      name: loopback-receiver-52008
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        readTimeout: 10000
-        transactionTimeoutMillis: 15000
-        responseMatchingType: session
-        keepAlive: false
-        port: 52008
-        responseContentType: application/json
-
-    steps:
-      - name: verify-received-headers
-        type: LoggingInterceptor
-        label: "Check logs for received SpEL headers"
-
-      # 🔥 Error Simulator: Throws 423 (VALIDATION_FAILED) if TARGET_VAL is 'ERR'
-      - name: force-error-generator
-        type: SpELValidatorInterceptor
+zefio:
+  flows:
+    # ============================================================================
+    # 🚀 [Flow A] Sender: The SpEL Alchemist (Error Isolation and Intelligent Recovery)
+    # ============================================================================
+    - name: loopback-sender-flow
+      ingress:
+        name: client-in-51008
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
         config:
-          condition: "#{body['TARGET_VAL'] != 'ERR'}"
-          errorMessage: "Simulated Remote Server Error"
-          errorStatus: "VALIDATION_FAILED"
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51008
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-      - name: normal-response
-        type: SpELModifierInterceptor
+      steps:
+        - name: strategy-scope
+          type: TRY_SCOPE
+
+          # 🔄 [Axis of Time] Retry twice (set short as it is a self-call)
+          retry:
+            enabled: true
+            maxRetries: 2
+            delay: 500
+
+          # 🛡️ [Axis of Space] Secure bypass path on error
+          on-error: FALLBACK
+
+          steps:
+            - name: call-internal-target
+              type: HttpUpstream
+              telegram: fixed-http-req
+              exchangePattern: RequestReply
+              config:
+                workThreadCount: 8
+                connectTimeout: 3000
+                soKeepAlive: false
+                tcpNoDelay: true
+                soReUseAddr: true
+                readTimeout: 5000
+                transactionTimeoutMillis: 10000
+                responseMatchingType: session
+                keepAlive: false
+                poolMaxSize: 0
+                onceMaxRetries: 3
+                onceTryTimeoutMillis: 2000
+                onceBackoffDelayMillis: 500
+                host: "localhost"
+                port: 52008 # 🎯 Targets Flow B in the same process
+                requestHttpMethod: POST
+                requestPath: "/base/test/#{body.TARGET_VAL}"
+                requestHeaderKeyValues:
+                  X-SERVER-NAME: "#{T(java.net.InetAddress).localHost.hostName}"
+                  X-GEN-DATE: "#{T(java.time.LocalDate).now().toString()}"
+                  X-TID: "#{payload.trxID}"
+
+          # 🚑 [Bypass Path] Analyze error types for selective recovery
+          fallback-steps:
+            - name: fallback-router
+              type: SWITCH
+              cases:
+                # 💡 [Phase 4 Evolution] Mark as success only if it is a REMOTE_CLIENT/SERVER error
+                - condition: "#{#exception != null and #exception.status.name().startsWith('REMOTE_')}"
+                  steps:
+                    - name: fallback-success-mark
+                      type: SpELModifierInterceptor
+                      config:
+                        assignments:
+                          - target: "body['PREFIX']"
+                            expression: "#{'RES'}"
+                          - target: "body['DUMMY_HEADER']"
+                            expression: "#{'Resolved via Conditional Fallback'}"
+
+              # 💡 Other errors (TIMEOUT, etc.) are not recovered and returned as error responses (Default)
+              defaultSteps:
+                - name: fatal-error-log
+                  type: LoggingInterceptor
+                  config: { message: "Critical System Error in Loopback: #{#exception.message}" }
+
+    # ============================================================================
+    # 📥 [Flow B] Receiver: Data Verification and Responder (Virtual Target)
+    # ============================================================================
+    - name: temp-outbound-flow
+      label: "Virtual target for inbound reception"
+      ingress:
+        name: loopback-receiver-52008
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
         config:
-          assignments:
-            - target: "body['PREFIX']"
-              expression: "ACK"
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          readTimeout: 10000
+          transactionTimeoutMillis: 15000
+          responseMatchingType: session
+          keepAlive: false
+          port: 52008
+          responseContentType: application/json
 
-    # 💥 Global Error Handler (Receiver side)
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+      steps:
+        - name: verify-received-headers
+          type: LoggingInterceptor
+          label: "Check logs for received SpEL headers"
+
+        # 🔥 Error Simulator: Throws 423 (VALIDATION_FAILED) if TARGET_VAL is 'ERR'
+        - name: force-error-generator
+          type: SpELValidatorInterceptor
+          config:
+            condition: "#{body['TARGET_VAL'] != 'ERR'}"
+            errorMessage: "Simulated Remote Server Error"
+            errorStatus: "VALIDATION_FAILED"
+
+        - name: normal-response
+          type: SpELModifierInterceptor
+          config:
+            assignments:
+              - target: "body['PREFIX']"
+                expression: "ACK"
+
+      # 💥 Global Error Handler (Receiver side)
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null

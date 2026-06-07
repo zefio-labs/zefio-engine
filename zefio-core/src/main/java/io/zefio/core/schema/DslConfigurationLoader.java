@@ -40,7 +40,6 @@ public class DslConfigurationLoader {
             Yaml yaml = new Yaml();
 
             for (Resource res : resources) {
-                // Prevent duplicate loading using the absolute URL as an identifier
                 String fileId = res.getURL().toString();
                 if (!loadedFiles.add(fileId)) {
                     continue;
@@ -52,21 +51,34 @@ public class DslConfigurationLoader {
                     Map<String, Object> yamlMap = yaml.load(is);
                     if (yamlMap == null) continue;
 
-                    // 1. Process 'imports' recursively (Post-order traversal)
+                    // Extract imports from either root level or nested under the 'zefio' block
+                    List<String> imports = null;
                     if (yamlMap.containsKey("imports")) {
                         Object importsObj = yamlMap.get("imports");
                         if (importsObj instanceof List) {
-                            List<String> imports = (List<String>) importsObj;
-                            for (String importPath : imports) {
-                                if (importPath == null || importPath.trim().isEmpty()) {
-                                    log.warn("[DSL Loader] Skipped empty or null import path.");
-                                    continue;
-                                }
-                                loadRecursive(importPath, globalContext, loadedFiles);
-                            }
+                            imports = (List<String>) importsObj;
                         }
-                        // Remove 'imports' key after processing to keep the context clean
                         yamlMap.remove("imports");
+                    } else if (yamlMap.get("zefio") instanceof Map) {
+                        Map<String, Object> zefioSubMap = (Map<String, Object>) yamlMap.get("zefio");
+                        if (zefioSubMap.containsKey("imports")) {
+                            Object importsObj = zefioSubMap.get("imports");
+                            if (importsObj instanceof List) {
+                                imports = (List<String>) importsObj;
+                            }
+                            zefioSubMap.remove("imports");
+                        }
+                    }
+
+                    // 1. Process discovered imports recursively (Post-order traversal)
+                    if (imports != null) {
+                        for (String importPath : imports) {
+                            if (importPath == null || importPath.trim().isEmpty()) {
+                                log.warn("[DSL Loader] Skipped empty or null import path.");
+                                continue;
+                            }
+                            loadRecursive(importPath, globalContext, loadedFiles);
+                        }
                     }
 
                     // 2. Merge current file content into the Global Context

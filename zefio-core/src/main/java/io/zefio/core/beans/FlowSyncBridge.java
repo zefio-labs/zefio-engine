@@ -6,12 +6,13 @@ import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.zefio.core.common.exception.FlowException;
 import io.zefio.core.common.exception.FlowResultStatus;
 import io.zefio.core.payload.Payload;
+import io.zefio.core.config.ZefioEngineProperties;
 import io.zefio.core.config.global.GlobalOptionsProperties;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
@@ -26,23 +27,24 @@ import java.util.concurrent.CompletableFuture;
  */
 @Component
 @RefreshScope
+@RequiredArgsConstructor
 public class FlowSyncBridge implements InitializingBean, DisposableBean {
 
     private final Logger log = LoggerFactory.getLogger(FlowSyncBridge.class);
+    private final ZefioEngineProperties zefioEngineProperties;
 
-    @Autowired
-    private GlobalOptionsProperties globalOptionsConfig;
-
-    private int MAX_CAPACITY;
+    private int maxCapacity;
     private Cache<String, CompletableFuture<Payload>> pendingRequests;
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        MAX_CAPACITY = globalOptionsConfig.getSyncBridge().getMaxCapacity();
-        int expireSeconds = globalOptionsConfig.getSyncBridge().getExpireSeconds();
+        // Enforce explicit type declaration to guarantee backward compatibility across runtime baseline environments
+        GlobalOptionsProperties.SyncBridge syncBridgeConfig = zefioEngineProperties.getGlobalOptions().getSyncBridge();
+        this.maxCapacity = syncBridgeConfig.getMaxCapacity();
+        int expireSeconds = syncBridgeConfig.getExpireSeconds();
 
         pendingRequests = Caffeine.newBuilder()
-                .maximumSize(MAX_CAPACITY)
+                .maximumSize(maxCapacity)
                 .expireAfterWrite(Duration.ofSeconds(expireSeconds))
                 .removalListener((String key, CompletableFuture<Payload> future, RemovalCause cause) -> {
                     if (cause.wasEvicted() && future != null && !future.isDone()) {
@@ -56,7 +58,7 @@ public class FlowSyncBridge implements InitializingBean, DisposableBean {
                     }
                 })
                 .build();
-        log.info("[FlowSyncBridge] Initialized with Caffeine Cache (Max: {}, Expire: {}s)", MAX_CAPACITY, expireSeconds);
+        log.info("[FlowSyncBridge] Initialized with Caffeine Cache (Max: {}, Expire: {}s)", maxCapacity, expireSeconds);
     }
 
     @Override
@@ -75,7 +77,7 @@ public class FlowSyncBridge implements InitializingBean, DisposableBean {
     }
 
     public CompletableFuture<Payload> register(String key) {
-        if (pendingRequests.estimatedSize() >= MAX_CAPACITY) {
+        if (pendingRequests.estimatedSize() >= maxCapacity) {
             log.error("[FlowSyncBridge] Bridge is full! Rejecting key [{}].", key);
             CompletableFuture<Payload> fail = new CompletableFuture<>();
             fail.completeExceptionally(new FlowException(FlowResultStatus.QUEUE_CAPACITY_EXCEEDED, "System Busy: Bridge Capacity Exceeded"));

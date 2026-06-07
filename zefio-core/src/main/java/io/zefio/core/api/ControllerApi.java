@@ -6,11 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.zefio.core.ZefioCoreService;
-import io.zefio.core.beans.FlowSettingsBean;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -40,20 +39,23 @@ import java.util.Map;
 public class ControllerApi {
 
 	private final Logger log = LoggerFactory.getLogger(getClass());
-
 	private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
 
-	@Autowired
+	// Core services declared as final to ensure immutability and thread-safety
 	private final ZefioCoreService service;
 
-	@Autowired
-	private FlowSettingsBean flowSettings;
+	// Directly inject the port into the controller layer to eliminate cross-bean dependency
+	@Value("${server.port:52001}")
+	private int serverPort;
 
-	public ControllerApi(ZefioCoreService flowService, FlowSettingsBean flowSettings) {
+	/**
+	 * Single constructor injection framework aligned with Spring Boot idioms.
+	 */
+	public ControllerApi(ZefioCoreService flowService) {
 		this.service = flowService;
-		this.flowSettings = flowSettings;
 
-		mapper.findAndRegisterModules();
+		// Establish deterministic JSON/YAML parsing guidelines
+		this.mapper.findAndRegisterModules();
 		this.mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, true);
 		this.mapper.configure(SerializationFeature.WRITE_ENUMS_USING_TO_STRING, true);
 		this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -67,26 +69,25 @@ public class ControllerApi {
 		DumperOptions dumperOptions = new DumperOptions();
 		dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
 		dumperOptions.setPrettyFlow(true);
-
 		return new Yaml(dumperOptions);
 	}
 
 	@PostMapping(value = "/settings", consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<?> updateSettings(@RequestBody Map<String, Object> newSettings) {
 		try {
-			log.info("📥 수신된 설정 업데이트 요청: {}", newSettings);
+			log.info("[Ctrl-API] Received configuration update request: {}", newSettings);
 
 			String propertiesFile = System.getProperty("spring.config.location");
-			log.info("📥 수신된 설정 파일 위치: {}", propertiesFile);
+			log.info("[Ctrl-API] Target configuration location: {}", propertiesFile);
 			if (propertiesFile == null) {
 				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-						.body("spring.config.location 시스템 속성이 정의되지 않았습니다.");
+						.body("System property 'spring.config.location' is not defined.");
 			}
+
 			propertiesFile = propertiesFile.replace("classpath:/", "");
 			File yamlFile = new File(getClass().getClassLoader().getResource(propertiesFile).getFile());
 
 			Yaml yaml = createYaml();
-
 			List<Map<String, Object>> documents = new ArrayList<>();
 			try (InputStream inputStream = new FileInputStream(yamlFile)) {
 				yaml.loadAll(inputStream).forEach(obj -> {
@@ -110,12 +111,12 @@ public class ControllerApi {
 				}
 			}
 
-			log.info("✅ 설정 파일 업데이트 완료: {}", yamlFile.getAbsolutePath());
-			return ResponseEntity.ok("설정이 성공적으로 병합 및 저장되었습니다.");
+			log.info("[Ctrl-API] Configuration file updated successfully: {}", yamlFile.getAbsolutePath());
+			return ResponseEntity.ok("Configuration successfully merged and persisted.");
 		} catch (Exception e) {
-			log.error("❌ 설정 업데이트 실패", e);
+			log.error("[Ctrl-API] Configuration update sequence failed", e);
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-					.body("설정 업데이트 중 오류 발생: " + e.getMessage());
+					.body("Error occurred during configuration update: " + e.getMessage());
 		}
 	}
 
@@ -141,28 +142,33 @@ public class ControllerApi {
 			String url = String.format("http://%s:%d/actuator/refresh", InetAddress.getLocalHost().getHostAddress(), port);
 			HttpEntity<String> request = new HttpEntity<>(headers);
 			ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
-			log.info("Refresh response: {}", response.getStatusCode());
+			log.info("[Ctrl-API] Context refresh response status: {}", response.getStatusCode());
 		} catch (Exception e) {
-			log.error("Refresh call failed: {}", e.getMessage());
+			log.error("[Ctrl-API] Context refresh broadcast failed: {}", e.getMessage());
 		}
 	}
 
 	@GetMapping(value = "/on")
 	public ResponseEntity<?> getON() throws UnknownHostException {
-		if(log.isInfoEnabled()) log.info("{}", StringUtils.center(" ✔️ App Start Call. ", 70, "■"));
+		if (log.isInfoEnabled()) {
+			log.info("{}", StringUtils.center(" ✔️ App Start Call. ", 70, "■"));
+		}
 		this.service.execute();
 		return new ResponseEntity<String>(HttpStatus.OK);
 	}
 
 	@GetMapping(value = "/off")
 	public ResponseEntity<?> getOFF() throws UnknownHostException {
-		if(log.isInfoEnabled()) log.info("{}", StringUtils.center(" ✔️ App Stop Call. ", 70, "■"));
+		if (log.isInfoEnabled()) {
+			log.info("{}", StringUtils.center(" ✔️ App Stop Call. ", 70, "■"));
+		}
 		new Thread(() -> {
 			try {
 				Thread.sleep(500);
-				callRefresh(this.flowSettings.getServerPort());
+				// Resolved compile error by referencing the locally managed serverPort property
+				callRefresh(this.serverPort);
 			} catch (InterruptedException e) {
-				log.error("Thread sleep interrupted", e);
+				log.error("Thread sleep sequence interrupted", e);
 			}
 		}).start();
 		this.service.shutdown();

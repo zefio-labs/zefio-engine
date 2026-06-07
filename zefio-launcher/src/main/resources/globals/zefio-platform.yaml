@@ -1,0 +1,83 @@
+# ==============================================================================
+# Filename: globals/zefio-platform.yaml
+# Description: Unified static platform infrastructure configuration for Zefio Engine.
+# ==============================================================================
+zefio:
+
+  # ============================================================================
+  # ⚙️ [Layer 1] Global Operational Policies
+  # ============================================================================
+  global-options:
+    hotDeploy: true
+    default-retry:
+      enabled: false
+      maxRetries: 3
+      delay: 1000
+    sync-bridge:
+      max-capacity: 50000
+      expire-seconds: 60
+    exception-policy:
+      overrides: { }
+
+  # ============================================================================
+  # 🛡️ [Layer 2] Engine Core Thread Pools
+  # ============================================================================
+  thread-pools:
+    scheduler:
+      fixedPoolSize: 5
+      threadNamePrefix: Shared-Scheduler
+    failsafe:
+      fixedPoolSize: 200
+      threadNamePrefix: Shared-Failsafe
+    io:
+      fixedPoolSize: 300
+      queueCapacity: 50000
+      threadNamePrefix: Shared-Failsafe
+      autoScaling:
+        enabled: true
+        maxSize: 500
+        threshold: 0.5
+        checkInterval: 5
+        scaleUpStep: 50
+        scaleDownStep: 20
+
+  # ============================================================================
+  # 📈 [Layer 3] Engine Observability & SLA Thresholds
+  # ============================================================================
+  monitor:
+    metrics-reset:
+      cron: "0 0 0 * * *"
+      zone: "Asia/Seoul"
+    default-options:
+      enableThreadPoolLogger: true
+      enableQueueLogger: true
+      enableModuleMetricsLogger: true
+      enableGlobalMonitorLogger: true
+    thread-pool-threshold:
+      intervalSeconds: 5
+      queueCapacityRatio: 0.90
+      poolMaxRatio: 0.95
+      coreExhaustRatio: 0.95
+    module-metrics-threshold:
+      intervalSeconds: 5
+      failureRate: 0.05
+      avgExecTimeMs: 100
+    netty-event-loop-threshold:
+      intervalSeconds: 3
+      pendingTaskRatio: 3.0
+      activeThreadRatio: 0.8
+    connection-pool-threshold:
+      intervalSeconds: 5
+      usageRatio: 0.8
+    jvm-monitor-threshold:
+      intervalSeconds: 60
+      heapUsageRatio: 0.85
+      oldGenGcTimeMs: 500
+      gcFrequencySec: 60
+    logging-monitor-threshold:
+      intervalSeconds: 5
+      maxQueueCapacityRatio: 0.75
+      errorBurstRate: 5
+    queue-monitor-threshold:
+      intervalSeconds: 1
+      usageRatio: 0.8

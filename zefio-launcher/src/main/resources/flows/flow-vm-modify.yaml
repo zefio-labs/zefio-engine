@@ -2,242 +2,243 @@
 # Filename: flows/flow-vm-modify.yaml
 # Description: HTTP-to-Fixed relay and external system integration error isolation flow
 # ==============================================================================
-flows:
-  - name: flow-main
-    label: "HTTP Inbound and Fixed Conversion Relay Flow"
-    options:
-      threadPool:
-        corePoolSize: 1000
-        maxPoolSize: 2000
-        queueCapacity: 2000
-        autoScaling:
-          enabled: true
-          threshold: 0.5
-          checkInterval: 5
-          scaleUpStep: 2
-          scaleDownStep: 1
-      cpuQueue:
-        capacity: 10000
-      ioQueue:
-        capacity: 5000
+zefio:
+  flows:
+    - name: flow-vm-main
+      label: "HTTP Inbound and Fixed Conversion Relay Flow"
+      options:
+        threadPool:
+          corePoolSize: 1000
+          maxPoolSize: 2000
+          queueCapacity: 2000
+          autoScaling:
+            enabled: true
+            threshold: 0.5
+            checkInterval: 5
+            scaleUpStep: 2
+            scaleDownStep: 1
+        cpuQueue:
+          capacity: 10000
+        ioQueue:
+          capacity: 5000
 
-    ingress:
-      name: from-http-51006
-      label: "HTTP Source Inbound (51006)"
-      type: HttpIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-      config:
-        workThreadCount: 16
-        connectTimeout: 5000
-        soKeepAlive: true
-        tcpNoDelay: true
-        soReUseAddr: true
-        keepAlive: false
-        port: 51006
-        requestEncoding: utf-8
-        responseEncoding: utf-8
-        responseContentType: text/plain
-        responseMatchingType: session
-        readTimeout: 50000
-        transactionTimeoutMillis: 40000
-
-    steps:
-      # 🚀 [Phase 2] Guardrail Filter Installed (Top-most)
-      # [Step 1] Guardrail blockage network (Pure CPU operation - throws to global DLQ immediately on error)
-      - name: validate-payload
-        label: "Strict Input Payload Validation"
-        type: SpELValidatorInterceptor
+      ingress:
+        name: from-http-51006
+        label: "HTTP Source Inbound (51006)"
+        type: HttpIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
         config:
-          # TARGET_VAL must be 'ABC' to pass, otherwise blocked immediately
-          condition: "#{body['TARGET_VAL'] == 'ABC'}"
-          errorMessage: "Guardrail Blocked: TARGET_VAL must be 'ABC'"
-          errorStatus: "VALIDATION_FAILED"
+          workThreadCount: 16
+          connectTimeout: 5000
+          soKeepAlive: true
+          tcpNoDelay: true
+          soReUseAddr: true
+          keepAlive: false
+          port: 51006
+          requestEncoding: utf-8
+          responseEncoding: utf-8
+          responseContentType: text/plain
+          responseMatchingType: session
+          readTimeout: 50000
+          transactionTimeoutMillis: 40000
 
-      # 🚀 [Phase 3] Data Alchemy
-      # [Step 2] Data Alchemy
-      - name: modify-fixed-body
-        label: "Offset 3 data substitution (XYZ)"
-        type: SpELModifierInterceptor
-        retry:
-          enabled: false
-        config:
-          assignments:
-            # [1] ABC -> XYZ
-            - target: "body['TARGET_VAL']"
-              expression: "#{'XYZ'}"
+      steps:
+        # 🚀 [Phase 2] Guardrail Filter Installed (Top-most)
+        # [Step 1] Guardrail blockage network (Pure CPU operation - throws to global DLQ immediately on error)
+        - name: validate-payload
+          label: "Strict Input Payload Validation"
+          type: SpELValidatorInterceptor
+          config:
+            # TARGET_VAL must be 'ABC' to pass, otherwise blocked immediately
+            condition: "#{body['TARGET_VAL'] == 'ABC'}"
+            errorMessage: "Guardrail Blocked: TARGET_VAL must be 'ABC'"
+            errorStatus: "VALIDATION_FAILED"
 
-            # [2] REQ -> RES (This results in RESXYZ)
-            - target: "body['PREFIX']"
-              expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
+        # 🚀 [Phase 3] Data Alchemy
+        # [Step 2] Data Alchemy
+        - name: modify-fixed-body
+          label: "Offset 3 data substitution (XYZ)"
+          type: SpELModifierInterceptor
+          retry:
+            enabled: false
+          config:
+            assignments:
+              # [1] ABC -> XYZ
+              - target: "body['TARGET_VAL']"
+                expression: "#{'XYZ'}"
 
-            # [3] Property Evacuation (Alchemy)
-            - target: "payload.headers['ORIGIN_TRX_ID']"
-              expression: "#{body['GLOBAL_TRX_ID']}"
+              # [2] REQ -> RES (This results in RESXYZ)
+              - target: "body['PREFIX']"
+                expression: "#{body['PREFIX'] == 'REQ' ? 'RES' : 'ERR'}"
 
-            # 🚀 [Correction] Wrap with #{} to execute as an expression!
-            - target: "body['DUMMY_HEADER']"
-              expression: "#{T(java.lang.String).format('TS:%d-ID:%s', T(java.lang.System).currentTimeMillis(), T(java.util.UUID).randomUUID().toString().substring(0,8))}"
+              # [3] Property Evacuation (Alchemy)
+              - target: "payload.headers['ORIGIN_TRX_ID']"
+                expression: "#{body['GLOBAL_TRX_ID']}"
 
-            # [5] Numeric calculation
-            - target: "payload.headers['COMPLEX_SCORE']"
-              expression: "#{100 * 1.5 + (body['TARGET_VAL'] == 'ABC' ? 50 : 10)}"
+              # 🚀 [Correction] Wrap with #{} to execute as an expression!
+              - target: "body['DUMMY_HEADER']"
+                expression: "#{T(java.lang.String).format('TS:%d-ID:%s', T(java.lang.System).currentTimeMillis(), T(java.util.UUID).randomUUID().toString().substring(0,8))}"
 
-      # 🚀 [Phase 3] The missing link: Mapping properties to HTTP response headers
-      # [Step 3] 🚀 Metadata propagation
-      - name: sync-to-http-header
-        label: "Expose internal properties in response headers"
-        type: HttpHeaderValeSetter
-        config:
-          targetType: RESPONSE # 💡 RESPONSE -> Uses PayloadHeaders.HTTP_RESPONSE_PREFIX (http.res.)
-          headerKeyValues:
-            X-ORIGIN-TRX-ID: "#{payload.headers['ORIGIN_TRX_ID']}"
-            X-COMPLEX-SCORE: "#{payload.headers['COMPLEX_SCORE']}"
-            # 💡 Bonus: Embedding current time directly into headers is now possible.
-            X-PROC-TIME: "#{T(java.lang.System).currentTimeMillis()}"
+              # [5] Numeric calculation
+              - target: "payload.headers['COMPLEX_SCORE']"
+                expression: "#{100 * 1.5 + (body['TARGET_VAL'] == 'ABC' ? 50 : 10)}"
+
+        # 🚀 [Phase 3] The missing link: Mapping properties to HTTP response headers
+        # [Step 3] 🚀 Metadata propagation
+        - name: sync-to-http-header
+          label: "Expose internal properties in response headers"
+          type: HttpHeaderValeSetter
+          config:
+            targetType: RESPONSE # 💡 RESPONSE -> Uses PayloadHeaders.HTTP_RESPONSE_PREFIX (http.res.)
+            headerKeyValues:
+              X-ORIGIN-TRX-ID: "#{payload.headers['ORIGIN_TRX_ID']}"
+              X-COMPLEX-SCORE: "#{payload.headers['COMPLEX_SCORE']}"
+              # 💡 Bonus: Embedding current time directly into headers is now possible.
+              X-PROC-TIME: "#{T(java.lang.System).currentTimeMillis()}"
+
+        # ==============================================================================
+        # 🛡️ [Step 4] 🚀 Error Isolation Scope (External server communication segment protection)
+        # ==============================================================================
+        - name: safe-dynamic-call
+          label: "Safe Dynamic Routing Scope"
+          type: TRY_SCOPE
+
+          # 1. [Axis of Time] Retry up to 3 times if target VM server response is delayed
+          retry:
+            enabled: true
+            maxRetries: 3
+            delay: 500
+
+          # 2. [Axis of Space] If all 3 retries fail, execute bypass path without dropping HTTP connection
+          on-error: FALLBACK
+
+          # 3. [Normal Path] Perform sub-flow dynamic call
+          steps:
+            # 🚀 [Step 4] DYNAMIC VM OUTBOUND (Call dynamic microservice)
+            - name: dynamic-orchestrator
+              label: "Sub-flow dynamic caller"
+              type: DynamicLocalUpstream
+              config:
+                # 💡 Use ternary operator to assemble (determine) the destination sub-flow name at runtime.
+                # If it starts with TRX-9999, return 'flow-target-xml', otherwise 'flow-target-json'.
+                # 💡 [Solution] Write in a single line to prevent newline characters after '}'!
+                targetFlowExpression: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-9999') ? 'flow-target-xml' : 'flow-target-json'}"
+                timeout: 30000
+
+          # 4. [Bypass Path] Plan B executed on error (Graceful error response to client)
+          fallback-steps:
+            - name: build-error-response
+              label: "Assemble error message on dynamic call failure"
+              type: SpELModifierInterceptor
+              config:
+                assignments:
+                  # Set error code, and use the #exception variable created in Phase 4 to insert reason into body
+                  - target: "body['PREFIX']"
+                    expression: "'ERR'"
+                  - target: "body['ERR_REASON']"
+                    expression: "'Target microservice call failed: ' + #exception.message"
 
       # ==============================================================================
-      # 🛡️ [Step 4] 🚀 Error Isolation Scope (External server communication segment protection)
+      # 💥 Global Top-Level Error Handler (DLQ)
+      # Catches errors blocked by Guardrail (Step 1) or syntax errors that explode outside TryScope
       # ==============================================================================
-      - name: safe-dynamic-call
-        label: "Safe Dynamic Routing Scope"
-        type: TRY_SCOPE
+      on-error:
+        - error-type: ANY
+          steps:
+            - name: central-fixed-error
+              type: FixedFaultHandler
+              label: "Common Error Handling"
+              config:
+                errorCodeRules: [ ]
+                valueOverrides: [ ]
+                messageRule: null
 
-        # 1. [Axis of Time] Retry up to 3 times if target VM server response is delayed
-        retry:
-          enabled: true
-          maxRetries: 3
-          delay: 500
-
-        # 2. [Axis of Space] If all 3 retries fail, execute bypass path without dropping HTTP connection
-        on-error: FALLBACK
-
-        # 3. [Normal Path] Perform sub-flow dynamic call
-        steps:
-          # 🚀 [Step 4] DYNAMIC VM OUTBOUND (Call dynamic microservice)
-          - name: dynamic-orchestrator
-            label: "Sub-flow dynamic caller"
-            type: DynamicLocalUpstream
-            config:
-              # 💡 Use ternary operator to assemble (determine) the destination sub-flow name at runtime.
-              # If it starts with TRX-9999, return 'flow-target-xml', otherwise 'flow-target-json'.
-              # 💡 [Solution] Write in a single line to prevent newline characters after '}'!
-              targetFlowExpression: "#{payload.headers['ORIGIN_TRX_ID'].startsWith('TRX-9999') ? 'flow-target-xml' : 'flow-target-json'}"
-              timeout: 30000
-
-        # 4. [Bypass Path] Plan B executed on error (Graceful error response to client)
-        fallback-steps:
-          - name: build-error-response
-            label: "Assemble error message on dynamic call failure"
-            type: SpELModifierInterceptor
-            config:
-              assignments:
-                # Set error code, and use the #exception variable created in Phase 4 to insert reason into body
-                - target: "body['PREFIX']"
-                  expression: "'ERR'"
-                - target: "body['ERR_REASON']"
-                  expression: "'Target microservice call failed: ' + #exception.message"
 
     # ==============================================================================
-    # 💥 Global Top-Level Error Handler (DLQ)
-    # Catches errors blocked by Guardrail (Step 1) or syntax errors that explode outside TryScope
+    # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
     # ==============================================================================
-    on-error:
-      - error-type: ANY
-        steps:
-          - name: central-fixed-error
-            type: FixedFaultHandler
-            label: "Common Error Handling"
-            config:
-              errorCodeRules: [ ]
-              valueOverrides: [ ]
-              messageRule: null
+    - name: flow-target-xml
+      label: "XML Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-xml
+        type: LocalIngress                 # Internal dummy type
+        telegram: fixed-http-req   # Maintain identical telegram spec with main flow
+        exchangePattern: RequestReply
+      steps:
+        - name: vm-call-global-xml
+          label: "Call Global XML Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
+              - name: "Direct to XML Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: xml-tcp-delimiter
+                exchangePattern: RequestReply
+                retry:
+                  enabled: false
+                config:
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/xml
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8
 
-
-  # ==============================================================================
-  # 🚀 [Sub-Flow 1] Microservice dedicated to XML targets
-  # ==============================================================================
-  - name: flow-target-xml
-    label: "XML Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-xml
-      type: LocalIngress                 # Internal dummy type
-      telegram: fixed-http-req   # Maintain identical telegram spec with main flow
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-xml
-        label: "Call Global XML Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
-            - name: "Direct to XML Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: xml-tcp-delimiter
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
-              config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/xml
-                requestEncoding: utf-8
-                responseEncoding: utf-8
-
-  # ==============================================================================
-  # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
-  # ==============================================================================
-  - name: flow-target-json
-    label: "JSON Endpoint Dedicated Relay Flow"
-    ingress:
-      name: vm-inbound-json
-      type: LocalIngress
-      telegram: fixed-http-req
-      exchangePattern: RequestReply
-    steps:
-      - name: call-global-json
-        label: "Call Global JSON Endpoint"
-        type: SpELRouterInterceptor
-        config:
-          routingRules:
-            # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
-            - name: "Direct to JSON Endpoint"
-              condition: "#{true}"
-              type: HttpUpstream
-              telegram: json-standard
-              exchangePattern: RequestReply
-              retry:
-                enabled: false
-              config:
-                workThreadCount: 8
-                connectTimeout: 3000
-                soKeepAlive: false
-                tcpNoDelay: true
-                soReUseAddr: true
-                readTimeout: 5000
-                transactionTimeoutMillis: 10000
-                responseMatchingType: session
-                keepAlive: false
-                poolMaxSize: 0
-                onceMaxRetries: 3
-                onceTryTimeoutMillis: 2000
-                onceBackoffDelayMillis: 500
-                host: localhost
-                port: 51101
-                requestContentType: application/json
-                requestEncoding: utf-8
-                responseEncoding: utf-8
+    # ==============================================================================
+    # 🚀 [Sub-Flow 2] Microservice dedicated to JSON targets
+    # ==============================================================================
+    - name: flow-target-json
+      label: "JSON Endpoint Dedicated Relay Flow"
+      ingress:
+        name: vm-inbound-json
+        type: LocalIngress
+        telegram: fixed-http-req
+        exchangePattern: RequestReply
+      steps:
+        - name: vm-call-global-json
+          label: "Call Global JSON Endpoint"
+          type: SpELRouterInterceptor
+          config:
+            routingRules:
+              # 💡 Inside the sub-flow, call the mapped global endpoint unconditionally (#{true})
+              - name: "Direct to JSON Endpoint"
+                condition: "#{true}"
+                type: HttpUpstream
+                telegram: json-standard
+                exchangePattern: RequestReply
+                retry:
+                  enabled: false
+                config:
+                  workThreadCount: 8
+                  connectTimeout: 3000
+                  soKeepAlive: false
+                  tcpNoDelay: true
+                  soReUseAddr: true
+                  readTimeout: 5000
+                  transactionTimeoutMillis: 10000
+                  responseMatchingType: session
+                  keepAlive: false
+                  poolMaxSize: 0
+                  onceMaxRetries: 3
+                  onceTryTimeoutMillis: 2000
+                  onceBackoffDelayMillis: 500
+                  host: localhost
+                  port: 51101
+                  requestContentType: application/json
+                  requestEncoding: utf-8
+                  responseEncoding: utf-8
