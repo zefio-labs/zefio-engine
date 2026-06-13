@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Utility class for handling pre-flattened flow and step configurations.
@@ -120,5 +122,44 @@ public class FlowConfigUtils {
         step.setType(type);
         step.setConfig(config != null ? config : new HashMap<>());
         return step;
+    }
+
+    /**
+     * Parsing utility designed to evaluate property keys against running IntelliJ/OS environments blocks directly.
+     */
+    public static String resolveEnvPlaceholders(String text, String hardcodedFallback) {
+        if (text == null || text.isEmpty()) {
+            return hardcodedFallback;
+        }
+
+        // Regex capturing pattern rules matching standard template tokens: ${VARIABLE_NAME} or ${VARIABLE_NAME:DEFAULT}
+        Pattern pattern = Pattern.compile("\\$\\{([^:}]+)(?::([^}]+))?\\}");
+        Matcher matcher = pattern.matcher(text);
+
+        if (matcher.find()) {
+            String envKey = matcher.group(1);
+            String inlineFallback = matcher.group(2);
+
+            // Fetch absolute runtime mapping straight from the IntelliJ environment variables stack
+            String resolvedValue = System.getenv(envKey);
+            if (resolvedValue == null || resolvedValue.isEmpty()) {
+                resolvedValue = System.getProperty(envKey); // Secondary fallback fallback tracking standard JVM properties (-D)
+            }
+
+            if (resolvedValue != null && !resolvedValue.isEmpty()) {
+                log.info("[Zefio Placeholder Core] Successfully evaluated target key [{}] to OS path registry.", envKey);
+                return resolvedValue.trim();
+            }
+
+            if (inlineFallback != null && !inlineFallback.isEmpty()) {
+                log.warn("[Zefio Placeholder Core] Environment token [{}] absent, falling back to inline definition bounds.", envKey);
+                return inlineFallback.trim();
+            }
+
+            log.warn("[Zefio Placeholder Core] Terminal configuration missing for key [{}]. Deploying hardcoded absolute path parameters.", envKey);
+            return hardcodedFallback;
+        }
+
+        return text;
     }
 }

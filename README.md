@@ -1,51 +1,80 @@
 # Zefio Engine (Core Data Plane)
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0--RC-blue.svg)
 ![Java](https://img.shields.io/badge/Java-8%20%7C%2021+-orange.svg)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)
 ![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)
 
-**Zefio Engine** is a high-performance, asynchronous integration gateway and event mesh built upon the **Staged Event-Driven Architecture (SEDA)** pattern.
+**Zefio Engine** is an enterprise-grade integration gateway and ultra-high-speed event mesh runtime engineered by combining the **Staged Event-Driven Architecture (SEDA)** pattern with a high-performance, asynchronous, non-blocking I/O backbone.
 
-It is designed to handle massive data streams, AI prompt routing, and real-time IoT edge telemetry with extreme efficiency. Operating as the **Data Plane (DP)**, Zefio Engine autonomously syncs its schema to the [Zefio Control Plane (FlowShift Console)](#) via a Self-Healing Webhook Handshake, while executing Hot-Reloads and telemetry broadcasts entirely through Redis.
+This engine serves as the **Data Plane** runtime environment designed to isolate and process high-density traffic streams, asynchronous transaction routing, and real-time edge telemetry without risking resource exhaustion. At bootstrap, it utilizes a **Self-Healing Webhook Handshake** mechanism to dynamically register its component schemas with the Control Plane. Following initialization, all real-time pipeline hot-reloads and remote orchestration directives are synchronized seamlessly across cluster nodes using Redis Pub/Sub as the communication bridge.
 
 ---
 
 ## 🚀 Key Features
 
-* **SEDA Architecture:** Isolates heavy workloads into independent thread pools and queues, preventing system-wide thread exhaustion during massive traffic spikes.
-* **Declarative YAML Pipelines:** Build complex logic (Scatter-Gather, Try-Catch, Fail-Fast, Dynamic Routing) entirely through simple YAML flow definitions. No compilation required.
-* **Plug & Play Adapters:** Extensible integration with TCP, HTTP(REST), WebSockets, Kafka, Redis Pub/Sub, and JDBC.
-* **Self-Healing Bootstrap Handshake:** On startup, the engine actively pushes its configuration schema (Globals, DTOs, Plugins) to the Control Plane. If unreachable, it implements smart retries until successful.
-* **Edge-Ready & Multi-Arch:** Fully containerized and optimized for heterogeneous environments—from high-end cloud servers to ARM-based Edge devices like Raspberry Pi.
-* **Smart Telemetry:** Auto-detects JVM versions (Java 8 to 21+) and automatically aggregates real-time stream metrics to the Redis Hub for the Control Plane.
+* **SEDA-Driven Stage Isolation:** Strictly decouples CPU-bound workloads (`ComputeStageWorker`) from network-bound operations (`IoStageWorker` and Netty EventLoop groups) via physical transaction queues and dedicated thread pools. This architecture naturally prevents **thread starvation** during massive, unpredictable traffic spikes.
+* **Declarative Template Pipelines:** Orchestrates complex business workflows, scatter-gather routines, try-catch scopes, and dynamic routing structures through highly readable YAML descriptors—requiring **zero code compilation** and eliminating system downtime.
+* **Lossless MDC Trace Preservation:** Resolves the chronic context-loss vulnerabilities typical of non-blocking execution pipelines. Zefio automatically serializes and restores the **Mapped Diagnostic Context (MDC)** across all thread transitions and asynchronous handoff boundaries, guaranteeing end-to-end audit trails.
+* **Polymorphic Transaction Lifecycle Management:** Dynamically selects the optimal runtime strategy based on your required `ExchangePattern`. Supports high-speed asynchronous fire-and-forget streams (`FireAndForget`), token-bound session state matching (`Session`), and SpEL-driven raw payload extraction (`Telegram`).
+* **Pluggable Protocol Adapters:** Abstracts TCP (supporting fixed-length framing, custom delimiters, and dynamic length-field decoding), HTTP (REST), WebSockets, and Redis Pub/Sub streams straight into a unified core `Payload` object model for total format independence.
+* **Self-Healing Bootstrap Handshake:** Proactively pushes local master templates, global variables, and plugin schemas to the Control Plane at startup. If the Control Plane is temporarily unreachable, an **intelligent exponential backoff retry loop** takes over until cluster alignment is secured.
+* **Edge & Heterogeneous Optimization:** Features a lightweight footprint and efficient memory utilization layout, enabling identical Data Plane binaries to scale smoothly from high-availability cloud container infrastructures down to resource-constrained ARM-based IoT Edge devices like the Raspberry Pi.
 
 ---
 
-## 🏗 Architecture
+## 🏗 Data Plane Pipeline Architecture
 
-Zefio operates in a fully decoupled ecosystem:
-1. **Data Plane (Zefio Engine):** The core routing runtime. Executes YAML flows, pushes Master Templates via Webhooks, and streams telemetry via Redis (This repository).
-2. **Control Plane (Zefio Console):** A centralized Web UI featuring real-time dashboards and an AI-powered Pipeline Architect. It passively listens for DP schemas and orchestrates deployments via Redis Pub/Sub.
+The lifecycle of an inbound physical byte packet passing through the SEDA stages and the asynchronous transaction management layer inside the Zefio core engine is mapped below:
+
+```mermaid
+graph TD
+    %% Inbound Gateway Stage
+    subgraph Inbound_Gateway [Inbound Gateway Layer]
+        A[TcpIngress / HttpIngress] -->|Netty EventLoop Thread| B[TelegramDecoderFactory]
+        B -->|Slicing & Dynamic Length Parse| C[BasePayloadBuilder]
+    end
+
+    %% SEDA Offloading Stage
+    subgraph SEDA_Core_Engine [SEDA Core Engine Layer]
+        C -->|onPayload: Enqueue Event| D[IngressHandler / SEDA Queue]
+        D -->|Dispatch Task| E[PipelineOrchestrator]
+        E -->|Compute Work Load| F[ComputeStageWorker]
+
+        F -->|Lazy Parsing & Cached Expression| G[PayloadExpressionEvaluator]
+    end
+
+    %% Async Transaction & Outbound Stage
+    subgraph Outbound_Transaction [Outbound Transaction Layer]
+        F -->|Async Non-blocking Suspend| H[FlowSyncBridge]
+        F -->|Acquire Channel| I[NettyChannelManager / Connection Pool]
+        I -->|Register Promise to Caffeine Cache| J[TxnManager]
+        J -->|Strategy: Telegram / Session / FnF| K[ITxnManager]
+        K -->|Write & Flush Async| L[External Target System]
+    end
+
+    %% Telemetry Integration
+    J -.->|Real-time Metrics Push| M((Redis Telemetry Hub))
+```
 
 ---
 
 ## 🐳 Quick Start (Docker)
 
-Zefio Engine is distributed with a production-ready `Dockerfile` and dynamic `entrypoint.sh` that automatically tunes the JVM based on the Java version.
+Zefio Engine includes a production-ready `entrypoint.sh` script that automatically detects the runtime JVM version (Java 8 to 21+) and intelligently tunes kernel memory allocation parameters alongside the Garbage Collector based on container cgroup limits.
 
 ### 1. Build the Image
 ```bash
-# Clone the repository
+# Clone the repository and navigate into the root directory
 git clone [https://github.com/zefio-labs/zefio-engine.git](https://github.com/zefio-labs/zefio-engine.git)
 cd zefio-engine
 
-# Build the Docker image
+# Build the Docker container image
 docker build -t zefio-engine:1.0.0 .
 ```
 
 ### 2. Run the Container
-You can pass custom JVM arguments and environment variables via `JAVA_OPTS` and `APP_ENV`.
+Inject `JAVA_OPTS` and runtime environment variables (`APP_ENV`) to fine-tune active cluster profiles and memory ceiling bounds.
 
 ```bash
 docker run -d \
@@ -58,12 +87,12 @@ docker run -d \
   zefio-engine:1.0.0
 ```
 
-### 3. Verify Startup
-Check the logs to verify the dynamic JVM parameter application and the CP Handshake:
+### 3. Verify Startup & Handshake Status
+Monitor the container log output stream to verify the initialization of the dynamic JVM parameters and the successful execution of the self-healing bootstrap handshake with the Control Plane (CP).
 ```bash
 docker logs -f zefio-edge-node
 ```
-*Expected Output:*
+*Expected successful startup log output:*
 ```text
 ==================================================
 🚀 Starting Zefio (K8s Mode: prd)
@@ -73,15 +102,15 @@ docker logs -f zefio-edge-node
 ==================================================
 [DP-Handshake] Initializing CP handshake with URL: http://localhost:3000
 [DP-Handshake] ✅ Successfully registered Master Templates to CP.
+[Telemetry] Netty EventLoop State Tracker activated. Monitoring connection pools.
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-Zefio loads its routing logic via YAML files. The core configurations are typically injected via `classpath:/composite.yaml` (or customized via `-Dspring.config.location` in `entrypoint.sh`).
+The engine reads `classpath:/composite.yaml` as its primary configuration layer on startup. Adjust the `cp` binding parameters below to align with your infrastructure environment to ensure real-time telemetry streaming and hot-reloads.
 
-To seamlessly integrate with the Control Plane, configure the `cp` section:
 ```yaml
 zefio:
   node:
@@ -89,32 +118,32 @@ zefio:
     group: ${ZEFIO_NODE_GROUP:main}
   cp:
     enabled: true
-    # 💡 The Webhook URL of the Control Plane for the Bootstrap Handshake
+    # 💡 The Control Plane webhook endpoint where the Data Plane pushes its bootstrap schemas
     api-url: ${ZEFIO_CP_API_URL:http://localhost:3000}
     redis:
-      # 💡 The Redis cluster used for Telemetry & Hot-Reload Commands
+      # 💡 The target Redis Cluster address for streaming live telemetry metrics and receiving hot-reload directives
       url: ${ZEFIO_REDIS_URL:redis://localhost:6379/0}
     metrics:
-      push-interval-ms: 3000
+      push-interval-ms: 3000 # MicroMeter telemetry collation and dispatch frequency interval
 ```
 
 ---
 
 ## 🗺️ Roadmap to v1.0.0
 
-Zefio is currently transitioning from **Public Beta (v0.9.0)** to its stable release.
+Zefio is moving steadily through its public beta phases toward the official production-ready v1.0.0 stable release milestone.
 
-- [x] **v0.8.0**: SEDA Engine Core & Multi-Architecture Edge Clustering (Raspberry Pi support).
-- [x] **v0.9.0**: Redis-based Control Plane, Real-time Telemetry Dashboard, and AI Architect Prototype.
-- [x] **v1.0.0-RC (Current)**: Zero-Downtime Hot Deployment (Seamless pipeline reloading via Redis Pub/Sub) and Push-based Self-Healing Handshakes.
-- [ ] **v1.0.0 (Stable)**: Official Open Source Release & Documentation Polish.
+- [x] **v0.8.0**: Established the SEDA Core runtime engine layout and verified distributed heterogeneous clustering capabilities (validated across ARM-based edge node clusters).
+- [x] **v0.9.0**: Integrated the remote data plane orchestration layer and implemented the high-throughput Redis real-time telemetry streaming prototype.
+- [x] **v1.0.0-RC (Current)**: Implemented **Zero-Downtime Hot Deployment** driven by Redis Pub/Sub orchestration bridges and deployed the millisecond-precision self-healing bootstrap handshake mechanism.
+- [ ] **v1.0.0 (Stable)**: Announce the official open-source enterprise release and complete comprehensive end-to-end technical documentation audits.
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! If you'd like to improve the SEDA core, add a new protocol adapter, or help refine the AIOps pipeline logic, please submit a Pull Request or open an Issue.
+We welcome contributions from the open-source community to advance the Zefio runtime architecture! We are actively looking for pull requests and issue submissions focused on optimization of SEDA stage workers, custom legacy protocol adapter implementations, and expansion of asynchronous transaction recovery filters.
 
 ## 📄 License
 
-This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the terms of the **Apache License 2.0**. For complete details and copyright declarations, please review the accompanying [LICENSE](LICENSE) file.

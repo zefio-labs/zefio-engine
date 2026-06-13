@@ -1,7 +1,17 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="ZefioApplication" type="Application" factoryName="Application" nameIsGenerated="true">
+    <envs>
+      <env name="REDIS_URL" value="redis://e000.bond:6379/0" />
+      <env name="ONNX_MODEL_PATH" value="$PROJECT_DIR$/../temporal_fusion_model.onnx" />
+      <env name="GEMINI_API_KEY" value="AIzaSyAAdinmJHdP7Rc8aY7A4wF4oQuIMD3gHvk" />
+      <env name="OLLAMA_BASE_URL" value="http://112.161.164.148:11434/v1/chat/completions" />
+      <env name="KAMIS_API_KEY" value="5b027778-b9d7-4325-8c9d-53131729974c" />
+      <env name="DATA_GO_KR_KEY" value="f3e5c0bd6cf0f108baee3441af14256c95d27b3684f23334cac132d82f075d0b" />
+      <env name="ITS_API_KEY" value="219da87a2e2e488aabd887023ff51b85" />
+      <env name="SMART_FARM_KOREA_KEY" value="0d0eb791a45e473997dda19318faf2ef" />
+    </envs>
     <option name="MAIN_CLASS_NAME" value="io.zefio.launcher.ZefioApplication" />
-    <module name="zefio-launcher" />
+    <module name="zefio-agri-launcher" />
     <option name="VM_PARAMETERS" value="-Dspring.profiles.active=prd -Dapplication.version=1.0 -Dspring.config.location=classpath:/application.yaml -Djava.net.preferIPv4Stack=true -Dfile.encoding=utf-8" />
     <extension name="coverage">
       <pattern>
